@@ -1,0 +1,385 @@
+import React, { useState } from 'react';
+import {
+  Menu,
+  Bell,
+  HelpCircle,
+  LogOut,
+  User as UserIcon,
+  ChevronDown,
+  Shield,
+  Briefcase,
+  UserCheck,
+  ArrowRightLeft,
+  BookOpen,
+  FileText,
+  PhoneCall,
+  ShieldAlert,
+} from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useHRMS } from '../context/HRMSContext';
+import { EthioReLogo } from './EthioReLogo';
+import { ActiveTab, UserRole } from '../types/hrms';
+
+interface NavbarProps {
+  onToggleSidebar: () => void;
+  onOpenHelp: () => void;
+  onOpenProfile: () => void;
+  onOpenNotifications: () => void;
+  onNavigateTo: (tab: ActiveTab) => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  onToggleSidebar,
+  onOpenHelp,
+  onOpenProfile,
+  onOpenNotifications,
+  onNavigateTo,
+}) => {
+  const { currentUser, logout, switchRoleForDemo, isAdmin } = useAuth();
+  const { attendanceRecords, leaveRecords, companyProfile, firestoreRulesRequired, setIsRulesModalOpen } = useHRMS();
+
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
+  const [showHelpMenu, setShowHelpMenu] = useState(false);
+
+  // Count alerts for badge
+  const todayStr = new Date().toISOString().split('T')[0];
+  const alertCount =
+    attendanceRecords.filter((a) => a.attendanceDate === todayStr && (a.lateStatus || a.attendanceStatus === 'Absent')).length +
+    leaveRecords.filter((l) => l.leaveStatus === 'Active' && todayStr >= l.startDate && todayStr <= l.endDate).length;
+
+  return (
+    <header
+      id="main-navbar"
+      className="sticky top-0 z-30 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-8 shadow-xs"
+    >
+      {/* Left: Mobile menu toggle + Logo + Entity Title with Geometric Divider */}
+      <div className="flex items-center gap-3 sm:gap-4">
+        <button
+          id="btn-toggle-sidebar"
+          onClick={onToggleSidebar}
+          aria-label="Toggle navigation menu"
+          className="p-2 rounded-lg text-gray-500 hover:text-[#002855] hover:bg-gray-100 lg:hidden cursor-pointer"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        <EthioReLogo size="md" />
+
+        <div className="hidden md:block h-6 w-[1px] bg-gray-200 mx-1"></div>
+        <span className="hidden md:inline-block text-xs font-semibold text-gray-500 tracking-tight">
+          {companyProfile?.displayName || 'Ethiopian Reinsurance S.C.'}
+        </span>
+      </div>
+
+      {/* Right: Quick Role Switcher + Notifications + Help + User Profile */}
+      <div className="flex items-center gap-3 sm:gap-5">
+        {/* Quick Role Switcher Demo Badge */}
+        <div className="relative">
+          <button
+            id="btn-role-switcher-dropdown"
+            onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold cursor-pointer transition-all shadow-2xs hover:bg-gray-50"
+            style={{
+              borderColor: isAdmin ? '#002855' : '#D4AF37',
+              backgroundColor: isAdmin ? 'rgba(0, 40, 85, 0.05)' : 'rgba(212, 175, 55, 0.1)',
+              color: isAdmin ? '#002855' : '#855d0a',
+            }}
+            title="Click to quickly switch roles between Administrator and HR Officer"
+          >
+            <ArrowRightLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline text-[11px] font-medium text-gray-500 uppercase tracking-wider">Role:</span>
+            <span className="font-bold">{currentUser?.role}</span>
+            <ChevronDown className="w-3 h-3 opacity-60" />
+          </button>
+
+          {showRoleSwitcher && (
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-3 py-1.5 border-b border-gray-100">
+                <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+                  Switch Active Role
+                </span>
+              </div>
+              <button
+                id="btn-switch-admin"
+                onClick={() => {
+                  switchRoleForDemo('Administrator');
+                  setShowRoleSwitcher(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
+                  currentUser?.role === 'Administrator' ? 'font-bold text-[#002855] bg-blue-50/60' : 'text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-[#002855]" />
+                  <div>
+                    <div>Administrator</div>
+                    <div className="text-[10px] text-gray-500">Full System &amp; RBAC Access</div>
+                  </div>
+                </div>
+                {currentUser?.role === 'Administrator' && <span className="w-2 h-2 rounded-full bg-[#002855]" />}
+              </button>
+
+              <button
+                id="btn-switch-hr"
+                onClick={() => {
+                  switchRoleForDemo('HR Admin');
+                  setShowRoleSwitcher(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
+                  currentUser?.role === 'HR Admin' ? 'font-bold text-[#855d0a] bg-amber-50/60' : 'text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Briefcase className="w-4 h-4 text-[#D4AF37]" />
+                  <div>
+                    <div>HR Admin</div>
+                    <div className="text-[10px] text-gray-500">HR Operational Management</div>
+                  </div>
+                </div>
+                {currentUser?.role === 'HR Admin' && <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />}
+              </button>
+
+              <button
+                id="btn-switch-employee"
+                onClick={() => {
+                  switchRoleForDemo('Employee');
+                  setShowRoleSwitcher(false);
+                }}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
+                  currentUser?.role === 'Employee' ? 'font-bold text-emerald-800 bg-emerald-50/60' : 'text-gray-700'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-emerald-600" />
+                  <div>
+                    <div>Employee</div>
+                    <div className="text-[10px] text-gray-500">Self-Service Access Only</div>
+                  </div>
+                </div>
+                {currentUser?.role === 'Employee' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Firestore Rules Badge / Alert */}
+        {firestoreRulesRequired && (
+          <button
+            id="btn-rules-alert-nav"
+            onClick={() => setIsRulesModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-300 rounded-md text-xs font-semibold hover:bg-amber-100 transition-colors cursor-pointer"
+            title="Firestore Security Rules Setup Required"
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-600 animate-pulse shrink-0" />
+            <span className="hidden sm:inline">Firebase Rules</span>
+          </button>
+        )}
+
+        {/* Notifications Button */}
+        <button
+          id="btn-top-notifications"
+          onClick={onOpenNotifications}
+          aria-label="Open notifications"
+          className="relative text-gray-400 hover:text-[#D4AF37] p-1.5 transition-colors cursor-pointer"
+        >
+          <Bell className="w-5 h-5" />
+          {alertCount > 0 && (
+            <span className="absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-[#D4AF37] text-[#002855] text-[9px] font-black flex items-center justify-center ring-2 ring-white">
+              {alertCount}
+            </span>
+          )}
+        </button>
+
+        {/* Help Menu Dropdown in Top Navigation */}
+        <div className="relative">
+          <button
+            id="btn-top-help"
+            onClick={() => setShowHelpMenu(!showHelpMenu)}
+            aria-label="Open help menu"
+            className="flex items-center gap-1 text-gray-500 hover:text-[#002855] p-1.5 rounded-md hover:bg-gray-100 transition-colors cursor-pointer"
+            title="Help & Support Menu"
+          >
+            <HelpCircle className="w-5 h-5 text-gray-500 hover:text-[#002855]" />
+            <ChevronDown className="w-3 h-3 opacity-60 hidden sm:inline" />
+          </button>
+
+          {showHelpMenu && (
+            <div className="absolute right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150 text-xs">
+              <div className="px-4 py-2 border-b border-gray-100">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[#002855] text-xs">Help &amp; Documentation</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-[#002855] font-semibold">
+                    v2.1
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Guidance &amp; Ethiopian Labour Law Compliance
+                </p>
+              </div>
+
+              <div className="py-1">
+                <button
+                  id="btn-help-menu-guide"
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    onOpenHelp();
+                  }}
+                  className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer text-gray-700 hover:text-[#002855]"
+                >
+                  <BookOpen className="w-4 h-4 text-[#002855] shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">HRMS User Manual</div>
+                    <div className="text-[11px] text-gray-500">Comprehensive module guides &amp; FAQs</div>
+                  </div>
+                </button>
+
+                <button
+                  id="btn-help-menu-roles"
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    onNavigateTo('roles');
+                  }}
+                  className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer text-gray-700 hover:text-[#002855]"
+                >
+                  <Shield className="w-4 h-4 text-[#D4AF37] shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Role &amp; Permissions Matrix</div>
+                    <div className="text-[11px] text-gray-500">Administrator vs HR Officer permissions</div>
+                  </div>
+                </button>
+
+                <button
+                  id="btn-help-menu-law"
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    onOpenHelp();
+                  }}
+                  className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer text-gray-700 hover:text-[#002855]"
+                >
+                  <FileText className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Labour Law Proclamation</div>
+                    <div className="text-[11px] text-gray-500">Proclamation No. 1156/2019 rules</div>
+                  </div>
+                </button>
+
+                <button
+                  id="btn-help-menu-rules"
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    setIsRulesModalOpen(true);
+                  }}
+                  className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer text-gray-700 hover:text-[#002855]"
+                >
+                  <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold flex items-center gap-1.5">
+                      <span>Firestore Security Rules</span>
+                      {firestoreRulesRequired && (
+                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded font-semibold">Action needed</span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-500">View &amp; publish Firebase security rules</div>
+                  </div>
+                </button>
+
+                <button
+                  id="btn-help-menu-contact"
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    onOpenHelp();
+                  }}
+                  className="w-full px-4 py-2.5 text-left hover:bg-gray-50 flex items-start gap-2.5 cursor-pointer text-gray-700 hover:text-[#002855]"
+                >
+                  <PhoneCall className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">IT Support &amp; Administrator</div>
+                    <div className="text-[11px] text-gray-500">support@ethiore.com &middot; Ext. 5757</div>
+                  </div>
+                </button>
+              </div>
+
+              <div className="px-4 py-2 border-t border-gray-100 bg-slate-50 flex items-center justify-between text-[11px]">
+                <span className="text-gray-500 font-medium">Need immediate help?</span>
+                <button
+                  onClick={() => {
+                    setShowHelpMenu(false);
+                    onOpenHelp();
+                  }}
+                  className="font-bold text-[#002855] hover:underline cursor-pointer"
+                >
+                  Open Full Guide &rarr;
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* User Profile Area */}
+        <div className="relative">
+          <div
+            id="btn-top-user-profile"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+            className="flex items-center gap-3 cursor-pointer group select-none"
+          >
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold text-[#002855] group-hover:text-[#004080]">
+                {currentUser?.fullName}
+              </p>
+              <p className="text-[10px] text-gray-500 font-medium">{currentUser?.role}</p>
+            </div>
+
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-gray-100 border-2 border-[#D4AF37] flex items-center justify-center font-bold text-[#002855] text-sm shadow-xs">
+              {currentUser?.fullName.charAt(0) || 'U'}
+            </div>
+          </div>
+
+          {showUserMenu && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="px-4 py-2 border-b border-gray-100">
+                <p className="text-xs font-bold text-[#002855]">{currentUser?.fullName}</p>
+                <p className="text-[11px] text-gray-500 truncate">{currentUser?.email}</p>
+                <span
+                  className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded font-semibold uppercase tracking-wider"
+                  style={{
+                    backgroundColor: isAdmin ? 'rgba(0, 40, 85, 0.08)' : 'rgba(212, 175, 55, 0.15)',
+                    color: isAdmin ? '#002855' : '#855d0a',
+                  }}
+                >
+                  {currentUser?.role}
+                </span>
+              </div>
+
+              <button
+                id="btn-profile-edit"
+                onClick={() => {
+                  setShowUserMenu(false);
+                  onOpenProfile();
+                }}
+                className="w-full px-4 py-2 text-left text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2 cursor-pointer"
+              >
+                <UserIcon className="w-3.5 h-3.5 text-gray-500" />
+                <span>My Profile &amp; Password</span>
+              </button>
+
+              <div className="border-t border-gray-100 my-1"></div>
+
+              <button
+                id="btn-logout"
+                onClick={() => {
+                  setShowUserMenu(false);
+                  logout();
+                }}
+                className="w-full px-4 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+};

@@ -1,0 +1,177 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Ethio-Re corporate HRMS authenticated user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["Administrator", "HR Admin", "Employee"] },
+        "status": { "type": "string", "enum": ["Pending Verification", "Active", "Inactive", "Suspended"] },
+        "emailVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 32 },
+        "updatedAt": { "type": "string", "maxLength": 32 },
+        "lastLoginAt": { "type": "string", "maxLength": 32 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "updatedBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["uid", "fullName", "email", "role", "status"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Ethio-Re employee profile record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "employeeId": { "type": "string", "maxLength": 32 },
+        "firstName": { "type": "string", "maxLength": 64 },
+        "middleName": { "type": "string", "maxLength": 64 },
+        "lastName": { "type": "string", "maxLength": 64 },
+        "fullName": { "type": "string", "maxLength": 128 },
+        "gender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "email": { "type": "string", "format": "email", "maxLength": 128 },
+        "phoneNumber": { "type": "string", "maxLength": 32 },
+        "departmentId": { "type": "string", "maxLength": 128 },
+        "departmentName": { "type": "string", "maxLength": 128 },
+        "position": { "type": "string", "maxLength": 128 },
+        "employmentType": { "type": "string", "maxLength": 64 },
+        "employmentStatus": { "type": "string", "maxLength": 64 },
+        "category": { "type": "string", "maxLength": 64 },
+        "hireDate": { "type": "string", "maxLength": 16 },
+        "photoUrl": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "employeeId", "firstName", "lastName", "departmentName", "position", "employmentStatus"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Daily employee attendance check-in and operational finalization record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "employeeId": { "type": "string", "maxLength": 32 },
+        "employeeName": { "type": "string", "maxLength": 128 },
+        "department": { "type": "string", "maxLength": 128 },
+        "attendanceDate": { "type": "string", "maxLength": 16 },
+        "checkInTime": { "type": "string", "maxLength": 16 },
+        "checkOutTime": { "type": "string", "maxLength": 16 },
+        "attendanceStatus": { "type": "string", "enum": ["Present", "Late", "Absent", "Half Day", "On Leave"] },
+        "lateStatus": { "type": "boolean" },
+        "lateMinutes": { "type": "number" },
+        "remarks": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "employeeId", "attendanceDate", "attendanceStatus"]
+    },
+    "LeaveRecord": {
+      "title": "LeaveRecord",
+      "description": "HR Officer directly registered employee leave record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "employeeId": { "type": "string", "maxLength": 32 },
+        "employeeName": { "type": "string", "maxLength": 128 },
+        "department": { "type": "string", "maxLength": 128 },
+        "leaveTypeId": { "type": "string", "maxLength": 64 },
+        "leaveTypeName": { "type": "string", "maxLength": 64 },
+        "startDate": { "type": "string", "maxLength": 16 },
+        "endDate": { "type": "string", "maxLength": 16 },
+        "numberOfDays": { "type": "number" },
+        "reason": { "type": "string", "maxLength": 500 },
+        "leaveStatus": { "type": "string", "enum": ["Active", "Completed", "Cancelled"] },
+        "remarks": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "employeeId", "startDate", "endDate", "numberOfDays", "leaveStatus"]
+    },
+    "Department": {
+      "title": "Department",
+      "description": "Organizational unit within Ethiopian Reinsurance",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 32 },
+        "headOfDepartment": { "type": "string", "maxLength": 128 },
+        "headEmployeeId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "description": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "name", "code", "status"]
+    },
+    "CompanySettings": {
+      "title": "CompanySettings",
+      "description": "Centralized company profile and branding configuration",
+      "type": "object",
+      "properties": {
+        "companyDisplayName": { "type": "string", "maxLength": 128 },
+        "legalCompanyName": { "type": "string", "maxLength": 128 },
+        "shortName": { "type": "string", "maxLength": 64 },
+        "logoUrl": { "type": "string", "maxLength": 512 },
+        "primaryColor": { "type": "string", "maxLength": 32 },
+        "secondaryColor": { "type": "string", "maxLength": 32 },
+        "accentColor": { "type": "string", "maxLength": 32 },
+        "email": { "type": "string", "maxLength": 128 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "website": { "type": "string", "maxLength": 128 },
+        "address": { "type": "string", "maxLength": 256 },
+        "country": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["companyDisplayName", "legalCompanyName"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Audit trail logging user actions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 32 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userName": { "type": "string", "maxLength": 128 },
+        "userRole": { "type": "string", "enum": ["Administrator", "HR Officer"] },
+        "module": { "type": "string", "maxLength": 64 },
+        "action": { "type": "string", "maxLength": 128 },
+        "recordId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1000 }
+      },
+      "required": ["id", "timestamp", "userName", "userRole", "module", "action"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Ethio-Re user accounts and roles"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Ethio-Re employee directory records"
+    },
+    "/departments/{departmentId}": {
+      "schema": "Department",
+      "description": "Organizational department records"
+    },
+    "/attendance/{attendanceId}": {
+      "schema": "AttendanceRecord",
+      "description": "Attendance tracking and check-in logs"
+    },
+    "/leaveRecords/{leaveId}": {
+      "schema": "LeaveRecord",
+      "description": "Directly registered leave records"
+    },
+    "/companySettings/{settingId}": {
+      "schema": "CompanySettings",
+      "description": "Centralized company profile and branding configuration"
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLog",
+      "description": "System operational audit trail logs"
+    },
+    "/roles/{roleId}": {
+      "schema": "RoleDefinition",
+      "description": "Role-Based Access Control configurable permissions per role"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Personalized notifications for employees regarding leave, attendance, and profile changes"
+    }
+  }
+}

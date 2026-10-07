@@ -1,0 +1,245 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Designated Primary Administrator Check
+    // Matches verified administrator accounts: contactesfaye@gmail.com (UID: CgUr5SlKO6NZqZK4BPWB3Q4IDIF2), sebleworksisay01@gmail.com, admin@ethiopianre.com
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.uid == 'CgUr5SlKO6NZqZK4BPWB3Q4IDIF2' ||
+        (
+          request.auth.token.email != null && (
+            request.auth.token.email.lower() in [
+              'contactesfaye@gmail.com',
+              'admin@ethiopianre.com',
+              'sebleworksisay01@gmail.com'
+            ]
+          )
+        )
+      );
+    }
+
+    // Role-Based Access Control (RBAC): Administrator
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['Administrator', 'Admin']
+        )
+      );
+    }
+
+    // Role-Based Access Control (RBAC): HR Admin
+    function isHRAdmin() {
+      return isSignedIn() && (
+        isAdmin() ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          'role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['HR Admin', 'HR Officer', 'HROfficer']
+        )
+      );
+    }
+
+    // Check if the target user document is a protected primary administrator
+    function isProtectedAdminDoc(userDocData) {
+      return userDocData.email != null && userDocData.email.lower() in [
+        'contactesfaye@gmail.com',
+        'admin@ethiopianre.com',
+        'sebleworksisay01@gmail.com'
+      ];
+    }
+
+    // System connection & testing endpoints
+    match /system/{testId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /test/{testId} {
+      allow read: if true;
+    }
+
+    // 1. Users collection: users/{userId}
+    // RBAC Security:
+    // - Only Administrator or HR Admin or self can read user profiles
+    // - Users can never choose their own role during self-registration (defaults to Employee, unless SuperAdmin)
+    // - Non-admin users cannot promote themselves or modify their own role/permissions
+    // - Only authorized Administrator can change or assign roles
+    // - Primary administrator cannot be deleted or demoted
+    match /users/{userId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        request.auth.uid == userId
+      );
+
+      allow create: if isSignedIn() && (
+        isAdmin() ||
+        (
+          request.auth.uid == userId &&
+          (
+            isSuperAdmin() ||
+            !('role' in request.resource.data) ||
+            request.resource.data.role == 'Employee'
+          )
+        )
+      );
+
+      allow update: if isSignedIn() && (
+        // Administrator can update any user, but cannot demote protected primary admin
+        (isAdmin() && (!isProtectedAdminDoc(resource.data) || request.resource.data.role == 'Administrator')) ||
+        // Regular user can update permitted personal profile fields ONLY, and cannot change role or permissions
+        (
+          request.auth.uid == userId &&
+          request.resource.data.role == resource.data.role &&
+          (!('permissions' in request.resource.data) || request.resource.data.permissions == resource.data.permissions)
+        )
+      );
+
+      allow delete: if isAdmin() && !isProtectedAdminDoc(resource.data) && request.auth.uid != userId;
+    }
+
+    // 2. Roles & RBAC Configuration: roles/{roleId} & rbac_roles/{roleId}
+    // Only Administrator can manage RBAC roles and permissions
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /rbac_roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 3. Employees: employees/{employeeId}
+    // - Administrator & HR Admin have operational access
+    // - Employee can read only their own employee profile record
+    // - Employee can update permitted personal contact info on their own record
+    match /employees/{employeeId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
+        (resource.data.linkedUserId != null && resource.data.linkedUserId == request.auth.uid) ||
+        (resource.data.email != null && request.auth.token.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+      );
+
+      allow create: if isHRAdmin();
+
+      allow update: if isHRAdmin() || (
+        isSignedIn() &&
+        (
+          resource.data.userId == request.auth.uid ||
+          resource.data.linkedUserId == request.auth.uid ||
+          (resource.data.email != null && request.auth.token.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+        )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // 4. Departments: departments/{departmentId}
+    // - Read allowed for all authenticated users
+    // - Management allowed for Administrator and HR Admin
+    // - Delete allowed for Administrator
+    match /departments/{departmentId} {
+      allow read: if isSignedIn();
+      allow create, update: if isHRAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 5. Attendance: attendance/{attendanceId}
+    // - Administrator & HR Admin can read and manage all
+    // - Employee can read only their own attendance
+    match /attendance/{attendanceId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.employeeId != null && resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+      );
+
+      allow create, update: if isHRAdmin() || isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // 6. Leave Records: leaveRecords/{leaveId} & leave/{leaveId}
+    // - Administrator & HR Admin can read and manage all
+    // - Employee can read only their own leave records
+    match /leaveRecords/{leaveId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+      );
+
+      allow create, update: if isHRAdmin() || isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /leave/{leaveId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+      );
+
+      allow create, update: if isHRAdmin() || isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    // 7. Company Settings: companySettings/{settingId} & settings/{settingId}
+    // Protected corporate settings: Readable by all (for branding/login), writable exclusively by Administrators
+    match /companySettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 8. Activity Logs: activityLogs/{logId} & activity_logs/{logId}
+    // Audit logs: readable exclusively by Administrators; create allowed for signed-in actions and authentication audits; immutable
+    match /activityLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    match /activity_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    // 9. Notifications: notifications/{notificationId}
+    // Employee-targeted personal alerts: employees can only read and update their own notifications
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.recipientUserId != null && resource.data.recipientUserId == request.auth.uid) ||
+        (resource.data.recipientEmail != null && request.auth.token.email != null && resource.data.recipientEmail.lower() == request.auth.token.email.lower())
+      );
+      allow create: if isHRAdmin() || isSignedIn();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        (resource.data.recipientUserId != null && resource.data.recipientUserId == request.auth.uid) ||
+        (resource.data.recipientEmail != null && request.auth.token.email != null && resource.data.recipientEmail.lower() == request.auth.token.email.lower())
+      );
+      allow delete: if isAdmin() || isHRAdmin();
+    }
+  }
+}

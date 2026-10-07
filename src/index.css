@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+:root {
+  --primary: #002855;
+  --primary-color: #002855;
+  --secondary: #004080;
+  --secondary-color: #004080;
+  --accent: #D4AF37;
+  --accent-color: #D4AF37;
+  --bg-light: #F3F4F6;
+  --white: #FFFFFF;
+  --border: #E5E7EB;
+}
+
+/* Geometric Balance Core Classes with Dynamic Branding */
+.sidebar-item {
+  transition: all 0.2s ease-in-out;
+  border-left: 4px solid transparent;
+}
+
+.sidebar-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-item.active {
+  background-color: var(--secondary-color, #004080) !important;
+  border-left: 4px solid var(--accent-color, #D4AF37) !important;
+  color: #FFFFFF !important;
+}
+
+.stat-card {
+  border-top: 3px solid var(--accent-color, #D4AF37) !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-1px);
+}
+
+.table-header {
+  background-color: #F9FAFB;
+  border-bottom: 2px solid #E5E7EB;
+}
+
+.geometric-border-l {
+  border-left: 3px solid var(--accent-color, #D4AF37) !important;
+}
+
+.geometric-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Dynamic Brand Utility Classes */
+.brand-bg-primary {
+  background-color: var(--primary-color, #002855) !important;
+}
+
+.brand-text-primary {
+  color: var(--primary-color, #002855) !important;
+}
+
+.brand-bg-secondary {
+  background-color: var(--secondary-color, #004080) !important;
+}
+
+.brand-text-secondary {
+  color: var(--secondary-color, #004080) !important;
+}
+
+.brand-bg-accent {
+  background-color: var(--accent-color, #D4AF37) !important;
+}
+
+.brand-text-accent {
+  color: var(--accent-color, #D4AF37) !important;
+}
+
+.brand-border-accent {
+  border-color: var(--accent-color, #D4AF37) !important;
+}
