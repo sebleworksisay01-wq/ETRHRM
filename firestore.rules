@@ -8,7 +8,7 @@ service cloud.firestore {
     }
 
     // Designated Primary Administrator Check
-    // Matches verified administrator accounts: contactesfaye@gmail.com (UID: CgUr5SlKO6NZqZK4BPWB3Q4IDIF2), sebleworksisay01@gmail.com, admin@ethiopianre.com
+    // Matches verified administrator accounts: contactesfaye@gmail.com (UID: CgUr5SlKO6NZqZK4BPWB3Q4IDIF2), sebleworksisay01@gmail.com, admin@ethiopianre.com, itofficer@ethiopianre.com
     function isSuperAdmin() {
       return isSignedIn() && (
         request.auth.uid == 'CgUr5SlKO6NZqZK4BPWB3Q4IDIF2' ||
@@ -17,7 +17,8 @@ service cloud.firestore {
             request.auth.token.email.lower() in [
               'contactesfaye@gmail.com',
               'admin@ethiopianre.com',
-              'sebleworksisay01@gmail.com'
+              'sebleworksisay01@gmail.com',
+              'itofficer@ethiopianre.com'
             ]
           )
         )
@@ -53,7 +54,8 @@ service cloud.firestore {
       return userDocData.email != null && userDocData.email.lower() in [
         'contactesfaye@gmail.com',
         'admin@ethiopianre.com',
-        'sebleworksisay01@gmail.com'
+        'sebleworksisay01@gmail.com',
+        'itofficer@ethiopianre.com'
       ];
     }
 
@@ -123,12 +125,20 @@ service cloud.firestore {
     // - Employee can read only their own employee profile record
     // - Employee can update permitted personal contact info on their own record
     match /employees/{employeeId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
         (resource.data.userId != null && resource.data.userId == request.auth.uid) ||
         (resource.data.linkedUserId != null && resource.data.linkedUserId == request.auth.uid) ||
-        (resource.data.email != null && request.auth.token.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+        (resource.data.email != null && request.auth.token.email != null && (resource.data.email == request.auth.token.email || resource.data.email.lower() == request.auth.token.email.lower()))
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.linkedUserId == request.auth.uid ||
+        resource.data.email == request.auth.token.email
       );
 
       allow create: if isHRAdmin();
@@ -138,7 +148,7 @@ service cloud.firestore {
         (
           resource.data.userId == request.auth.uid ||
           resource.data.linkedUserId == request.auth.uid ||
-          (resource.data.email != null && request.auth.token.email != null && resource.data.email.lower() == request.auth.token.email.lower())
+          (resource.data.email != null && request.auth.token.email != null && (resource.data.email == request.auth.token.email || resource.data.email.lower() == request.auth.token.email.lower()))
         )
       );
 
@@ -159,11 +169,18 @@ service cloud.firestore {
     // - Administrator & HR Admin can read and manage all
     // - Employee can read only their own attendance
     match /attendance/{attendanceId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
-        (resource.data.employeeId != null && resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
-        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+        (resource.data.employeeEmail != null && request.auth.token.email != null && (resource.data.employeeEmail == request.auth.token.email || resource.data.employeeEmail.lower() == request.auth.token.email.lower())) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && (resource.data.recordedBy == request.auth.token.email || resource.data.recordedBy.lower() == request.auth.token.email.lower()))
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        resource.data.employeeEmail == request.auth.token.email ||
+        resource.data.recordedBy == request.auth.token.email
       );
 
       allow create, update: if isHRAdmin() || isSignedIn();
@@ -174,11 +191,18 @@ service cloud.firestore {
     // - Administrator & HR Admin can read and manage all
     // - Employee can read only their own leave records
     match /leaveRecords/{leaveId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
-        (resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
-        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+        (resource.data.employeeEmail != null && request.auth.token.email != null && (resource.data.employeeEmail == request.auth.token.email || resource.data.employeeEmail.lower() == request.auth.token.email.lower())) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && (resource.data.recordedBy == request.auth.token.email || resource.data.recordedBy.lower() == request.auth.token.email.lower()))
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        resource.data.employeeEmail == request.auth.token.email ||
+        resource.data.recordedBy == request.auth.token.email
       );
 
       allow create, update: if isHRAdmin() || isSignedIn();
@@ -186,11 +210,18 @@ service cloud.firestore {
     }
 
     match /leave/{leaveId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
-        (resource.data.employeeEmail != null && request.auth.token.email != null && resource.data.employeeEmail.lower() == request.auth.token.email.lower()) ||
-        (resource.data.recordedBy != null && request.auth.token.email != null && resource.data.recordedBy.lower() == request.auth.token.email.lower())
+        (resource.data.employeeEmail != null && request.auth.token.email != null && (resource.data.employeeEmail == request.auth.token.email || resource.data.employeeEmail.lower() == request.auth.token.email.lower())) ||
+        (resource.data.recordedBy != null && request.auth.token.email != null && (resource.data.recordedBy == request.auth.token.email || resource.data.recordedBy.lower() == request.auth.token.email.lower()))
+      );
+
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        resource.data.employeeEmail == request.auth.token.email ||
+        resource.data.recordedBy == request.auth.token.email
       );
 
       allow create, update: if isHRAdmin() || isSignedIn();
@@ -226,18 +257,24 @@ service cloud.firestore {
     // 9. Notifications: notifications/{notificationId}
     // Employee-targeted personal alerts: employees can only read and update their own notifications
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
         (resource.data.recipientUserId != null && resource.data.recipientUserId == request.auth.uid) ||
-        (resource.data.recipientEmail != null && request.auth.token.email != null && resource.data.recipientEmail.lower() == request.auth.token.email.lower())
+        (resource.data.recipientEmail != null && request.auth.token.email != null && (resource.data.recipientEmail == request.auth.token.email || resource.data.recipientEmail.lower() == request.auth.token.email.lower()))
+      );
+      allow list: if isSignedIn() && (
+        isAdmin() ||
+        isHRAdmin() ||
+        resource.data.recipientUserId == request.auth.uid ||
+        resource.data.recipientEmail == request.auth.token.email
       );
       allow create: if isHRAdmin() || isSignedIn();
       allow update: if isSignedIn() && (
         isAdmin() ||
         isHRAdmin() ||
         (resource.data.recipientUserId != null && resource.data.recipientUserId == request.auth.uid) ||
-        (resource.data.recipientEmail != null && request.auth.token.email != null && resource.data.recipientEmail.lower() == request.auth.token.email.lower())
+        (resource.data.recipientEmail != null && request.auth.token.email != null && (resource.data.recipientEmail == request.auth.token.email || resource.data.recipientEmail.lower() == request.auth.token.email.lower()))
       );
       allow delete: if isAdmin() || isHRAdmin();
     }

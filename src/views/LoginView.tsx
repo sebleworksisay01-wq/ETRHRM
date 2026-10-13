@@ -11,7 +11,6 @@ import {
   AlertCircle,
   KeyRound,
   RefreshCw,
-  HelpCircle,
   ChevronRight,
   ShieldCheck,
   UserPlus,
@@ -24,11 +23,9 @@ import { useAuth, COMPANY_EMAIL_DOMAIN, SPECIAL_ADMIN_EMAIL, isAuthorizedAdmin }
 import { useHRMS } from '../context/HRMSContext';
 import { EthioReLogo } from '../components/EthioReLogo';
 
-interface LoginViewProps {
-  onOpenHelp?: () => void;
-}
+interface LoginViewProps {}
 
-export const LoginView: React.FC<LoginViewProps> = ({ onOpenHelp }) => {
+export const LoginView: React.FC<LoginViewProps> = () => {
   const { login, register, verifyEmail, resendVerificationEmail, forgotPassword, resetPassword } =
     useAuth();
   const { logAction, companyProfile } = useHRMS();
@@ -272,18 +269,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onOpenHelp }) => {
           <span className="text-xs font-semibold text-white/80 tracking-wide uppercase">
             {companyProfile?.displayName || 'Ethiopian Reinsurance S.C.'}
           </span>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs text-white/80">
-          {onOpenHelp && (
-            <button
-              onClick={onOpenHelp}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors cursor-pointer"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-[#D4AF37]" />
-              <span>Help &amp; Guide</span>
-            </button>
-          )}
         </div>
       </header>
 
@@ -916,9 +901,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onOpenHelp }) => {
             {/* Support Notice */}
             <div className="pt-6 mt-6 border-t border-slate-100 text-center text-xs text-slate-400">
               <span>Need administrative assistance? Contact IT Helpdesk at </span>
-              <span className="font-semibold text-slate-700">support@ethiopianre.com</span>
+              <a
+                href="mailto:itofficer@ethiopianre.com"
+                className="font-semibold text-slate-700 hover:text-[#002855] transition-colors"
+              >
+                itofficer@ethiopianre.com
+              </a>
               <span className="mx-1.5">&middot;</span>
-              <span>Ext. 5757</span>
+              <span className="font-semibold text-slate-700">Phone: 0932083373/0919410712</span>
             </div>
           </div>
         </div>

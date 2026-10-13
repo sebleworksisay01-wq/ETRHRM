@@ -606,96 +606,105 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Employees Listener (Record-level access: Employee role listens only to their own record)
     try {
-      const isOnlyEmployee = currentUser?.role === 'Employee' && !isAdmin;
-      const empQueryRef = isOnlyEmployee && currentUser?.email
-        ? query(collection(db, 'employees'), where('email', '==', currentUser.email.toLowerCase().trim()))
+      const isStaffUser = Boolean(isAdmin || isHROfficer || currentUser?.role === 'Administrator' || currentUser?.role === 'HR Admin');
+      const userEmail = (currentUser?.email || auth.currentUser?.email || '').toLowerCase().trim();
+      const empQueryRef = !isStaffUser
+        ? (userEmail ? query(collection(db, 'employees'), where('email', '==', userEmail)) : null)
         : collection(db, 'employees');
 
-      const empSub = onSnapshot(
-        empQueryRef as any,
-        (snapshot: any) => {
-          const list: Employee[] = [];
-          snapshot.forEach((doc: any) => {
-            if (DEMO_RECORD_IDS.employees.includes(doc.id) || doc.id.startsWith('emp-00')) return;
-            list.push({ ...doc.data(), id: doc.id } as Employee);
-          });
-          setEmployees(list);
-        },
-        (err: any) => {
-          if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
-            setFirestoreRulesRequired(true);
-            handleFirestoreError(err, OperationType.LIST, 'employees');
-          } else {
-            console.warn('Employees listener connection notice:', err?.message || err);
+      if (empQueryRef) {
+        const empSub = onSnapshot(
+          empQueryRef as any,
+          (snapshot: any) => {
+            const list: Employee[] = [];
+            snapshot.forEach((doc: any) => {
+              if (DEMO_RECORD_IDS.employees.includes(doc.id) || doc.id.startsWith('emp-00')) return;
+              list.push({ ...doc.data(), id: doc.id } as Employee);
+            });
+            setEmployees(list);
+          },
+          (err: any) => {
+            if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+              setFirestoreRulesRequired(true);
+              handleFirestoreError(err, OperationType.LIST, 'employees');
+            } else {
+              console.warn('Employees listener connection notice:', err?.message || err);
+            }
           }
-        }
-      );
-      unsubscribes.push(empSub);
+        );
+        unsubscribes.push(empSub);
+      }
     } catch (err) {
       console.warn('Employees listener error:', err);
     }
 
     // 4. Attendance Listener (Record-level access: Employee role listens only to their own attendance)
     try {
-      const isOnlyEmployee = currentUser?.role === 'Employee' && !isAdmin;
-      const attQueryRef = isOnlyEmployee && currentUser?.email
-        ? query(collection(db, 'attendance'), where('employeeEmail', '==', currentUser.email.toLowerCase().trim()))
+      const isStaffUser = Boolean(isAdmin || isHROfficer || currentUser?.role === 'Administrator' || currentUser?.role === 'HR Admin');
+      const userEmail = (currentUser?.email || auth.currentUser?.email || '').toLowerCase().trim();
+      const attQueryRef = !isStaffUser
+        ? (userEmail ? query(collection(db, 'attendance'), where('employeeEmail', '==', userEmail)) : null)
         : collection(db, 'attendance');
 
-      const attSub = onSnapshot(
-        attQueryRef as any,
-        (snapshot: any) => {
-          const list: AttendanceRecord[] = [];
-          snapshot.forEach((doc: any) => {
-            if (DEMO_RECORD_IDS.attendance.includes(doc.id) || doc.id.startsWith('att-00')) return;
-            list.push({ ...doc.data(), id: doc.id } as AttendanceRecord);
-          });
-          // Sort attendance by date descending
-          list.sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
-          setAttendanceRecords(list);
-        },
-        (err: any) => {
-          if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
-            setFirestoreRulesRequired(true);
-            handleFirestoreError(err, OperationType.LIST, 'attendance');
-          } else {
-            console.warn('Attendance listener connection notice:', err?.message || err);
+      if (attQueryRef) {
+        const attSub = onSnapshot(
+          attQueryRef as any,
+          (snapshot: any) => {
+            const list: AttendanceRecord[] = [];
+            snapshot.forEach((doc: any) => {
+              if (DEMO_RECORD_IDS.attendance.includes(doc.id) || doc.id.startsWith('att-00')) return;
+              list.push({ ...doc.data(), id: doc.id } as AttendanceRecord);
+            });
+            // Sort attendance by date descending
+            list.sort((a, b) => b.attendanceDate.localeCompare(a.attendanceDate));
+            setAttendanceRecords(list);
+          },
+          (err: any) => {
+            if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+              setFirestoreRulesRequired(true);
+              handleFirestoreError(err, OperationType.LIST, 'attendance');
+            } else {
+              console.warn('Attendance listener connection notice:', err?.message || err);
+            }
           }
-        }
-      );
-      unsubscribes.push(attSub);
+        );
+        unsubscribes.push(attSub);
+      }
     } catch (err) {
       console.warn('Attendance listener error:', err);
     }
 
     // 5. Leave Records Listener (Record-level access: Employee role listens only to their own leaves)
     try {
-      const isOnlyEmployee = currentUser?.role === 'Employee' && !isAdmin;
-      const leaveQueryRef = isOnlyEmployee && currentUser?.email
-        ? query(collection(db, 'leaveRecords'), where('employeeEmail', '==', currentUser.email.toLowerCase().trim()))
+      const isStaffUser = Boolean(isAdmin || isHROfficer || currentUser?.role === 'Administrator' || currentUser?.role === 'HR Admin');
+      const userEmail = (currentUser?.email || auth.currentUser?.email || '').toLowerCase().trim();
+      const leaveQueryRef = !isStaffUser
+        ? (userEmail ? query(collection(db, 'leaveRecords'), where('employeeEmail', '==', userEmail)) : null)
         : collection(db, 'leaveRecords');
 
-      const leaveSub = onSnapshot(
-        leaveQueryRef as any,
-        (snapshot: any) => {
-          const list: LeaveRecord[] = [];
-          snapshot.forEach((doc: any) => {
-            if (DEMO_RECORD_IDS.leaves.includes(doc.id) || doc.id.startsWith('lv-00')) return;
-            list.push({ ...doc.data(), id: doc.id } as LeaveRecord);
-          });
-          list.sort((a, b) => b.startDate.localeCompare(a.startDate));
-          setLeaveRecords(list);
-        },
-        (err: any) => {
-          if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
-            setFirestoreRulesRequired(true);
-            handleFirestoreError(err, OperationType.LIST, 'leaveRecords');
-          } else {
-            console.warn('Leave records listener connection notice:', err?.message || err);
+      if (leaveQueryRef) {
+        const leaveSub = onSnapshot(
+          leaveQueryRef as any,
+          (snapshot: any) => {
+            const list: LeaveRecord[] = [];
+            snapshot.forEach((doc: any) => {
+              if (DEMO_RECORD_IDS.leaves.includes(doc.id) || doc.id.startsWith('lv-00')) return;
+              list.push({ ...doc.data(), id: doc.id } as LeaveRecord);
+            });
+            list.sort((a, b) => b.startDate.localeCompare(a.startDate));
+            setLeaveRecords(list);
+          },
+          (err: any) => {
+            if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+              setFirestoreRulesRequired(true);
+              handleFirestoreError(err, OperationType.LIST, 'leaveRecords');
+            } else {
+              console.warn('Leave records listener connection notice:', err?.message || err);
+            }
           }
-        }
-      );
-      unsubscribes.push(leaveSub);
+        );
+        unsubscribes.push(leaveSub);
+      }
     } catch (err) {
       console.warn('Leave records listener error:', err);
     }

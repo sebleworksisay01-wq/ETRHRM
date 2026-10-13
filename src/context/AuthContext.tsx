@@ -39,14 +39,19 @@ export const AUTHORIZED_ADMIN_EMAILS: string[] = [
   'contactesfaye@gmail.com',
   'sebleworksisay01@gmail.com',
   'admin@ethiopianre.com',
+  'itofficer@ethiopianre.com',
 ];
 
-export const isAuthorizedAdmin = (email?: string | null): boolean => {
+export const AUTHORIZED_ADMIN_UIDS: string[] = [
+  'CgUr5SlKO6NZqZK4BPWB3Q4IDIF2',
+];
+
+export const isAuthorizedAdmin = (email?: string | null, uid?: string | null): boolean => {
+  if (uid && AUTHORIZED_ADMIN_UIDS.includes(uid)) return true;
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
   return (
     AUTHORIZED_ADMIN_EMAILS.includes(normalized) ||
-    normalized.startsWith('admin@') ||
     normalized === SPECIAL_ADMIN_EMAIL.toLowerCase()
   );
 };
@@ -69,6 +74,8 @@ export const createDefaultUserProfile = (
           ? 'Esfaye Admin (Lead Systems)'
           : email.toLowerCase() === 'sebleworksisay01@gmail.com'
           ? 'Seblework Sisay (Lead Systems)'
+          : email.toLowerCase() === 'itofficer@ethiopianre.com'
+          ? 'IT Officer (System Admin)'
           : 'System Administrator';
     } else {
       displayName = email.split('@')[0] || 'Employee';
@@ -151,7 +158,7 @@ function getFriendlyAuthErrorMessage(errorCode: string): string {
     case 'auth/user-not-found':
     case 'auth/wrong-password':
     case 'auth/invalid-credential':
-      return 'Invalid corporate email or password. Please verify your credentials.';
+      return 'Invalid email or password. Please use your registered account.';
     case 'auth/email-already-in-use':
       return 'An account with this corporate email address already exists. Please sign in or reset your password.';
     case 'auth/operation-not-allowed':
@@ -165,7 +172,7 @@ function getFriendlyAuthErrorMessage(errorCode: string): string {
     case 'permission-denied':
       return 'Permission denied by corporate security rules.';
     default:
-      return 'An authentication error occurred. Please try again.';
+      return 'Invalid email or password. Please use your registered account.';
   }
 }
 
@@ -634,6 +641,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsVerificationRequired(false);
       setUnverifiedEmail(null);
       setLastUnverifiedCreds(null);
+
+      // Purge local storage and session caches of protected HR/employee data
+      try {
+        localStorage.removeItem('ethiore_attendance_cache_v2');
+        localStorage.removeItem('ethiore_leaves_cache');
+        localStorage.removeItem('ethiore_employees_cache');
+        localStorage.removeItem('ethiore_departments_cache');
+        localStorage.removeItem('ethiore_rbac_roles_cache');
+        sessionStorage.clear();
+      } catch (_) {}
+
+      // Replace browser URL with login to prevent Back button from navigating into protected views
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '/#login');
+      }
     }
   }, []);
 
@@ -855,18 +877,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser]);
 
-  // 11. SWITCH ROLE (For previewing RBAC roles if currentUser is authorized Administrator)
-  const switchRoleForDemo = useCallback((newRole: UserRole) => {
-    if (currentUser?.role === 'Administrator' || isAuthorizedAdmin(currentUser?.email)) {
-      let permissions = EMPLOYEE_PERMISSIONS;
-      if (newRole === 'Administrator') {
-        permissions = ADMINISTRATOR_PERMISSIONS;
-      } else if (newRole === 'HR Admin') {
-        permissions = HR_ADMIN_PERMISSIONS;
-      }
-      setCurrentUser((prev) => (prev ? { ...prev, role: newRole, permissions } : null));
-    }
-  }, [currentUser]);
+  // 11. SWITCH ROLE (Disabled to enforce immutable server-authenticated roles)
+  const switchRoleForDemo = useCallback((_newRole: UserRole) => {
+    // Roles are strictly authoritative and cannot be modified by the browser
+    console.warn('Role switching is disabled. User roles are strictly authoritative and loaded from trusted credentials.');
+  }, []);
 
   // Role permissions & Verification State
   const isAdmin = currentUser?.role === 'Administrator';

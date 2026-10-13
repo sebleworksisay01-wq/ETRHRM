@@ -18,6 +18,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useHRMS } from '../context/HRMSContext';
 import { EthioReLogo } from './EthioReLogo';
+import { ConfirmDialog } from './ConfirmDialog';
 import { ActiveTab, UserRole } from '../types/hrms';
 
 interface NavbarProps {
@@ -35,12 +36,18 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNotifications,
   onNavigateTo,
 }) => {
-  const { currentUser, logout, switchRoleForDemo, isAdmin } = useAuth();
+  const { currentUser, logout, isAdmin } = useAuth();
   const { attendanceRecords, leaveRecords, companyProfile, firestoreRulesRequired, setIsRulesModalOpen } = useHRMS();
 
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showRoleSwitcher, setShowRoleSwitcher] = useState(false);
   const [showHelpMenu, setShowHelpMenu] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+
+  const handleSignOutConfirm = async () => {
+    setShowSignOutConfirm(false);
+    setShowUserMenu(false);
+    await logout();
+  };
 
   // Count alerts for badge
   const todayStr = new Date().toISOString().split('T')[0];
@@ -74,93 +81,24 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Right: Quick Role Switcher + Notifications + Help + User Profile */}
       <div className="flex items-center gap-3 sm:gap-5">
-        {/* Quick Role Switcher Demo Badge */}
-        <div className="relative">
-          <button
-            id="btn-role-switcher-dropdown"
-            onClick={() => setShowRoleSwitcher(!showRoleSwitcher)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold cursor-pointer transition-all shadow-2xs hover:bg-gray-50"
-            style={{
-              borderColor: isAdmin ? '#002855' : '#D4AF37',
-              backgroundColor: isAdmin ? 'rgba(0, 40, 85, 0.05)' : 'rgba(212, 175, 55, 0.1)',
-              color: isAdmin ? '#002855' : '#855d0a',
-            }}
-            title="Click to quickly switch roles between Administrator and HR Officer"
-          >
-            <ArrowRightLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline text-[11px] font-medium text-gray-500 uppercase tracking-wider">Role:</span>
-            <span className="font-bold">{currentUser?.role}</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-
-          {showRoleSwitcher && (
-            <div className="absolute right-0 mt-2 w-60 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="px-3 py-1.5 border-b border-gray-100">
-                <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-                  Switch Active Role
-                </span>
-              </div>
-              <button
-                id="btn-switch-admin"
-                onClick={() => {
-                  switchRoleForDemo('Administrator');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
-                  currentUser?.role === 'Administrator' ? 'font-bold text-[#002855] bg-blue-50/60' : 'text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-[#002855]" />
-                  <div>
-                    <div>Administrator</div>
-                    <div className="text-[10px] text-gray-500">Full System &amp; RBAC Access</div>
-                  </div>
-                </div>
-                {currentUser?.role === 'Administrator' && <span className="w-2 h-2 rounded-full bg-[#002855]" />}
-              </button>
-
-              <button
-                id="btn-switch-hr"
-                onClick={() => {
-                  switchRoleForDemo('HR Admin');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
-                  currentUser?.role === 'HR Admin' ? 'font-bold text-[#855d0a] bg-amber-50/60' : 'text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <Briefcase className="w-4 h-4 text-[#D4AF37]" />
-                  <div>
-                    <div>HR Admin</div>
-                    <div className="text-[10px] text-gray-500">HR Operational Management</div>
-                  </div>
-                </div>
-                {currentUser?.role === 'HR Admin' && <span className="w-2 h-2 rounded-full bg-[#D4AF37]" />}
-              </button>
-
-              <button
-                id="btn-switch-employee"
-                onClick={() => {
-                  switchRoleForDemo('Employee');
-                  setShowRoleSwitcher(false);
-                }}
-                className={`w-full px-3 py-2 text-left text-xs flex items-center justify-between hover:bg-gray-50 cursor-pointer ${
-                  currentUser?.role === 'Employee' ? 'font-bold text-emerald-800 bg-emerald-50/60' : 'text-gray-700'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-emerald-600" />
-                  <div>
-                    <div>Employee</div>
-                    <div className="text-[10px] text-gray-500">Self-Service Access Only</div>
-                  </div>
-                </div>
-                {currentUser?.role === 'Employee' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
-              </button>
-            </div>
-          )}
+        {/* Verified Assigned Corporate Role Badge */}
+        <div
+          id="badge-user-role"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-semibold shadow-2xs select-none"
+          style={{
+            borderColor: isAdmin ? '#002855' : currentUser?.role === 'HR Admin' ? '#D4AF37' : '#10B981',
+            backgroundColor: isAdmin
+              ? 'rgba(0, 40, 85, 0.05)'
+              : currentUser?.role === 'HR Admin'
+              ? 'rgba(212, 175, 55, 0.1)'
+              : 'rgba(16, 185, 129, 0.08)',
+            color: isAdmin ? '#002855' : currentUser?.role === 'HR Admin' ? '#855d0a' : '#047857',
+          }}
+          title={`Verified corporate role: ${currentUser?.role || 'Employee'}`}
+        >
+          <Shield className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline text-[11px] font-medium text-gray-500 uppercase tracking-wider">Role:</span>
+          <span className="font-bold">{currentUser?.role || 'Employee'}</span>
         </div>
 
         {/* Firestore Rules Badge / Alert */}
@@ -369,7 +307,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 id="btn-logout"
                 onClick={() => {
                   setShowUserMenu(false);
-                  logout();
+                  setShowSignOutConfirm(true);
                 }}
                 className="w-full px-4 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer font-medium"
               >
@@ -379,7 +317,32 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           )}
         </div>
+
+        {/* Top-Right Corner Sign Out Button (Requirement: Far top-right corner of authenticated application header) */}
+        <div className="h-6 w-[1px] bg-gray-200 hidden sm:block"></div>
+
+        <button
+          id="btn-top-right-signout"
+          onClick={() => setShowSignOutConfirm(true)}
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 sm:border-rose-200 bg-white hover:bg-rose-50 text-slate-700 hover:text-rose-700 text-xs font-semibold transition-colors cursor-pointer shadow-2xs group"
+          title="Sign out of HRMS"
+        >
+          <LogOut className="w-3.5 h-3.5 text-slate-500 group-hover:text-rose-600 transition-colors" />
+          <span className="hidden sm:inline">Sign Out</span>
+        </button>
       </div>
+
+      {/* Sign Out Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showSignOutConfirm}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+        confirmText="Sign Out"
+        cancelText="Cancel"
+        isDestructive={true}
+        onConfirm={handleSignOutConfirm}
+        onCancel={() => setShowSignOutConfirm(false)}
+      />
     </header>
   );
 };

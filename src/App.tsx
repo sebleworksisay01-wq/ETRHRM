@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HRMSProvider, useHRMS } from './context/HRMSContext';
-import { ActiveTab } from './types/hrms';
+import { ActiveTab, UserRole } from './types/hrms';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { DashboardView } from './views/DashboardView';
@@ -24,8 +24,124 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { NotificationDrawer } from './components/NotificationDrawer';
 import { FirestoreRulesModal } from './components/FirestoreRulesModal';
 
+export const PROTECTED_TABS: ActiveTab[] = [
+  'dashboard',
+  'attendance',
+  'leave',
+  'employees',
+  'departments',
+  'reports',
+  'admin-config',
+  'roles',
+  'users',
+  'activity',
+  'settings',
+  'my-profile',
+  'my-attendance',
+  'my-leave',
+  'my-leave-balance',
+  'my-notifications',
+  'account-settings',
+];
+
+export const EMPLOYEE_ALLOWED_TABS: ActiveTab[] = [
+  'my-profile',
+  'my-attendance',
+  'my-leave',
+  'my-leave-balance',
+  'my-notifications',
+  'account-settings',
+];
+
+export const ADMIN_ONLY_TABS: ActiveTab[] = [
+  'admin-config',
+  'roles',
+  'users',
+  'activity',
+  'settings',
+];
+
+export const getRequestedTabFromUrl = (): ActiveTab | null => {
+  if (typeof window === 'undefined') return null;
+  const hash = window.location.hash.replace(/^#\/?/, '').trim().toLowerCase();
+  if (hash) {
+    const matched = PROTECTED_TABS.find((t) => t.toLowerCase() === hash);
+    if (matched) return matched;
+  }
+  const path = window.location.pathname.replace(/^\//, '').trim().toLowerCase();
+  if (path) {
+    const matched = PROTECTED_TABS.find((t) => t.toLowerCase() === path);
+    if (matched) return matched;
+  }
+  return null;
+};
+
+export const resolveAuthorizedTab = (role: UserRole, preferredTab?: ActiveTab | null): ActiveTab => {
+  if (role === 'Employee') {
+    if (preferredTab && EMPLOYEE_ALLOWED_TABS.includes(preferredTab)) {
+      return preferredTab;
+    }
+    return 'my-profile';
+  }
+  if (role === 'HR Admin') {
+    if (preferredTab && !ADMIN_ONLY_TABS.includes(preferredTab)) {
+      return preferredTab;
+    }
+    return 'dashboard';
+  }
+  // Administrator
+  if (preferredTab && PROTECTED_TABS.includes(preferredTab)) {
+    return preferredTab;
+  }
+  return 'dashboard';
+};
+
+/**
+ * Reusable authentication & authorization route guard for every protected route.
+ * Strictly verifies authenticated user exists, email verification is valid,
+ * loads trusted authorized role, checks permissions, and redirects unauthorized attempts.
+ */
+interface ProtectedRouteGuardProps {
+  moduleName: string;
+  allowedRoles?: UserRole[];
+  requiredPermission?: string;
+  onNavigateTo: (tab: ActiveTab) => void;
+  children: React.ReactNode;
+}
+
+export const ProtectedRouteGuard: React.FC<ProtectedRouteGuardProps> = ({
+  moduleName,
+  allowedRoles,
+  requiredPermission,
+  onNavigateTo,
+  children,
+}) => {
+  const { currentUser, canAccessModule, isEmployee } = useAuth();
+
+  if (!currentUser || !currentUser.emailVerified) {
+    return <UnauthenticatedRouteHandler />;
+  }
+
+  const role = currentUser.role;
+  const isRoleAllowed = !allowedRoles || allowedRoles.includes(role);
+  const isPermAllowed = !requiredPermission || canAccessModule(requiredPermission);
+
+  if (!isRoleAllowed || !isPermAllowed) {
+    const fallback: ActiveTab = isEmployee ? 'my-profile' : 'dashboard';
+    return (
+      <AccessDenied
+        moduleName={moduleName}
+        requiredRole={allowedRoles ? allowedRoles.join(' or ') : 'Authorized Role'}
+        onGoToDashboard={() => onNavigateTo(fallback)}
+      />
+    );
+  }
+
+  return <>{children}</>;
+};
+
 const MainLayout: React.FC = () => {
-  const { canAccessModule, isAdmin, isHRAdmin, isEmployee } = useAuth();
+  const { isAdmin, isHRAdmin, isEmployee, currentUser } = useAuth();
   const {
     companyProfile,
     firebaseStatus,
@@ -35,82 +151,79 @@ const MainLayout: React.FC = () => {
     logAction,
   } = useHRMS();
 
-  // Initial tab depending on user role
-  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
-    if (isEmployee) return 'my-profile';
-    return 'dashboard';
-  });
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const userRole = (currentUser?.role || (isEmployee ? 'Employee' : isAdmin ? 'Administrator' : 'HR Admin')) as UserRole;
 
-  // Global Modals
+  // Initial tab depending on user role and URL request
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    const fromUrl = getRequestedTabFromUrl();
+    return resolveAuthorizedTab(userRole, fromUrl);
+  });
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
-  // Synchronize initial landing tab when role changes (e.g. testing with switchRoleForDemo)
+  // Sync browser URL hash with activeTab
   useEffect(() => {
-    if (isEmployee) {
-      const employeeAllowed = [
-        'my-profile',
-        'my-attendance',
-        'my-leave',
-        'my-leave-balance',
-        'my-notifications',
-        'account-settings',
-      ];
-      if (!employeeAllowed.includes(activeTab)) {
-        setActiveTab('my-profile');
-      }
-    } else if (isHRAdmin && !isAdmin) {
-      const hrRestricted = ['users', 'roles', 'settings', 'activity', 'admin-config'];
-      if (hrRestricted.includes(activeTab)) {
-        setActiveTab('dashboard');
-      }
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/#${activeTab}`);
     }
-  }, [isEmployee, isHRAdmin, isAdmin]);
+  }, [activeTab]);
 
-  const handleNavigate = (tab: ActiveTab) => {
-    // Record unauthorized access attempt if blocked route is requested directly (Requirement 11)
-    if (isEmployee) {
-      const employeeAllowed = [
-        'my-profile',
-        'my-attendance',
-        'my-leave',
-        'my-leave-balance',
-        'my-notifications',
-        'account-settings',
-      ];
-      if (!employeeAllowed.includes(tab)) {
+  // Synchronize browser history and hash changes for authenticated users
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const fromUrl = getRequestedTabFromUrl();
+      const resolved = resolveAuthorizedTab(userRole, fromUrl);
+      if (fromUrl && fromUrl !== resolved) {
         logAction(
           'RBAC',
-          'Unauthorized RBAC access attempt',
-          `Route: ${tab}`,
-          `Employee attempted unauthorized navigation to ${tab}`,
-          { previousValue: 'Employee', newValue: tab }
+          'Unauthorized RBAC route attempt',
+          `Route: ${fromUrl}`,
+          `${userRole} attempted unauthorized access to: ${fromUrl}`
         );
       }
-    } else if (!isAdmin && ['users', 'roles', 'settings', 'activity', 'admin-config'].includes(tab)) {
+      setActiveTab(resolved);
+      window.history.replaceState(null, '', `/#${resolved}`);
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('hashchange', handleUrlChange);
+    return () => {
+      window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('hashchange', handleUrlChange);
+    };
+  }, [userRole, logAction]);
+
+  // Synchronize initial landing tab when role changes (e.g. testing with switchRoleForDemo)
+  useEffect(() => {
+    const resolved = resolveAuthorizedTab(userRole, activeTab);
+    if (resolved !== activeTab) {
+      setActiveTab(resolved);
+    }
+  }, [userRole]);
+
+  const handleNavigate = (tab: ActiveTab) => {
+    const resolved = resolveAuthorizedTab(userRole, tab);
+    if (resolved !== tab) {
       logAction(
         'RBAC',
         'Unauthorized RBAC access attempt',
         `Route: ${tab}`,
-        `HR Admin attempted unauthorized navigation to ${tab}`,
-        { previousValue: 'HR Admin', newValue: tab }
+        `${userRole} attempted unauthorized navigation to ${tab}`,
+        { previousValue: userRole, newValue: tab }
       );
     }
 
-    setActiveTab(tab);
+    setActiveTab(resolved);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', `/#${resolved}`);
+    }
   };
 
   // Check if activeTab is a Self-Service portal section
-  const isSelfServiceTab = [
-    'my-profile',
-    'my-attendance',
-    'my-leave',
-    'my-leave-balance',
-    'my-notifications',
-    'account-settings',
-  ].includes(activeTab);
+  const isSelfServiceTab = EMPLOYEE_ALLOWED_TABS.includes(activeTab);
 
   return (
     <div className="flex h-screen w-full bg-[#F3F4F6] text-[#111827] font-sans overflow-hidden">
@@ -151,144 +264,148 @@ const MainLayout: React.FC = () => {
           </div>
         )}
 
-        {/* Dynamic Content View Area - Protected Route Boundaries (Requirement 10) */}
+        {/* Dynamic Content View Area - Protected Route Boundaries */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto w-full">
-            {/* Self-Service Portal for Employees and direct personal view */}
+            {/* Self-Service Portal for Employees and staff self-service */}
             {isSelfServiceTab && (
-              <EmployeePortalView
-                activeSection={activeTab as any}
-                onNavigateSection={handleNavigate}
-              />
+              <ProtectedRouteGuard
+                moduleName="Staff Self-Service Portal"
+                allowedRoles={['Employee', 'HR Admin', 'Administrator']}
+                onNavigateTo={handleNavigate}
+              >
+                <EmployeePortalView
+                  activeSection={activeTab as any}
+                  onNavigateSection={handleNavigate}
+                />
+              </ProtectedRouteGuard>
             )}
 
             {/* HR Operational Views (Accessible by Administrator & HR Admin) */}
-            {activeTab === 'dashboard' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="Executive Dashboard"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-profile')}
-                />
-              ) : (
+            {activeTab === 'dashboard' && (
+              <ProtectedRouteGuard
+                moduleName="Executive Dashboard"
+                allowedRoles={['Administrator', 'HR Admin']}
+                onNavigateTo={handleNavigate}
+              >
                 <DashboardView
                   onNavigateTo={handleNavigate}
-                  onOpenAddEmployee={() => setActiveTab('employees')}
-                  onOpenRecordAttendance={() => setActiveTab('attendance')}
-                  onOpenRegisterLeave={() => setActiveTab('leave')}
+                  onOpenAddEmployee={() => handleNavigate('employees')}
+                  onOpenRecordAttendance={() => handleNavigate('attendance')}
+                  onOpenRegisterLeave={() => handleNavigate('leave')}
                 />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'attendance' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="Organization Attendance Management"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-attendance')}
-                />
-              ) : (
+            {activeTab === 'attendance' && (
+              <ProtectedRouteGuard
+                moduleName="Organization Attendance Management"
+                allowedRoles={['Administrator', 'HR Admin']}
+                requiredPermission="attendance:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AttendanceView />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'leave' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="Organization Leave Management"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-leave')}
-                />
-              ) : (
+            {activeTab === 'leave' && (
+              <ProtectedRouteGuard
+                moduleName="Organization Leave Management"
+                allowedRoles={['Administrator', 'HR Admin']}
+                requiredPermission="leave:view"
+                onNavigateTo={handleNavigate}
+              >
                 <LeaveView />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'employees' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="Employee Master Data"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-profile')}
-                />
-              ) : (
+            {activeTab === 'employees' && (
+              <ProtectedRouteGuard
+                moduleName="Employee Master Data"
+                allowedRoles={['Administrator', 'HR Admin']}
+                requiredPermission="employee:master:view"
+                onNavigateTo={handleNavigate}
+              >
                 <EmployeeView />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'departments' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="Department Management"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-profile')}
-                />
-              ) : (
+            {activeTab === 'departments' && (
+              <ProtectedRouteGuard
+                moduleName="Department Management"
+                allowedRoles={['Administrator', 'HR Admin']}
+                onNavigateTo={handleNavigate}
+              >
                 <DepartmentView />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'reports' &&
-              (isEmployee ? (
-                <AccessDenied
-                  moduleName="HR Analytics & Reports"
-                  requiredRole="HR Admin or Administrator"
-                  onGoToDashboard={() => setActiveTab('my-profile')}
-                />
-              ) : (
+            {activeTab === 'reports' && (
+              <ProtectedRouteGuard
+                moduleName="HR Analytics & Reports"
+                allowedRoles={['Administrator', 'HR Admin']}
+                requiredPermission="reports:view"
+                onNavigateTo={handleNavigate}
+              >
                 <ReportsView />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {/* Protected Administrative Routes: Administrator Only (Requirement 2, 5, 9) */}
-            {activeTab === 'admin-config' &&
-              (isAdmin ? (
+            {/* Protected Administrative Routes: Administrator Only */}
+            {activeTab === 'admin-config' && (
+              <ProtectedRouteGuard
+                moduleName="Admin Configuration"
+                allowedRoles={['Administrator']}
+                requiredPermission="admin:company_config:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AdminConfigView />
-              ) : (
-                <AccessDenied
-                  moduleName="Admin Configuration"
-                  requiredRole="Administrator"
-                  onGoToDashboard={() => setActiveTab(isEmployee ? 'my-profile' : 'dashboard')}
-                />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'roles' &&
-              (isAdmin ? (
+            {activeTab === 'roles' && (
+              <ProtectedRouteGuard
+                moduleName="RBAC Role Management"
+                allowedRoles={['Administrator']}
+                requiredPermission="admin:rbac:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AdminConfigView initialSubTab="rbac" />
-              ) : (
-                <AccessDenied
-                  moduleName="RBAC Role Management"
-                  requiredRole="Administrator"
-                  onGoToDashboard={() => setActiveTab(isEmployee ? 'my-profile' : 'dashboard')}
-                />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'users' &&
-              (isAdmin ? (
+            {activeTab === 'users' && (
+              <ProtectedRouteGuard
+                moduleName="User Management"
+                allowedRoles={['Administrator']}
+                requiredPermission="admin:users:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AdminConfigView initialSubTab="users" />
-              ) : (
-                <AccessDenied
-                  moduleName="User Management"
-                  requiredRole="Administrator"
-                  onGoToDashboard={() => setActiveTab(isEmployee ? 'my-profile' : 'dashboard')}
-                />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'activity' &&
-              (isAdmin ? (
+            {activeTab === 'activity' && (
+              <ProtectedRouteGuard
+                moduleName="System Audit & Activity Logs"
+                allowedRoles={['Administrator']}
+                requiredPermission="admin:audit:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AdminConfigView initialSubTab="audit" />
-              ) : (
-                <AccessDenied
-                  moduleName="System Audit & Activity Logs"
-                  requiredRole="Administrator"
-                  onGoToDashboard={() => setActiveTab(isEmployee ? 'my-profile' : 'dashboard')}
-                />
-              ))}
+              </ProtectedRouteGuard>
+            )}
 
-            {activeTab === 'settings' &&
-              (isAdmin ? (
+            {activeTab === 'settings' && (
+              <ProtectedRouteGuard
+                moduleName="Company Profile & System Settings"
+                allowedRoles={['Administrator']}
+                requiredPermission="admin:company_config:view"
+                onNavigateTo={handleNavigate}
+              >
                 <AdminConfigView initialSubTab="profile" />
-              ) : (
-                <AccessDenied
-                  moduleName="Company Profile & System Settings"
-                  requiredRole="Administrator"
-                  onGoToDashboard={() => setActiveTab(isEmployee ? 'my-profile' : 'dashboard')}
-                />
-              ))}
+              </ProtectedRouteGuard>
+            )}
           </div>
         </main>
 
@@ -332,6 +449,43 @@ const MainLayout: React.FC = () => {
   );
 };
 
+/**
+ * UnauthenticatedRouteHandler:
+ * Centralized guard for all unauthenticated visitors.
+ * Enforces that the Login page is the default landing page for the site.
+ * Redirects any manual attempts to enter protected URLs or hashes to /#login.
+ * Prevents browser Back button from navigating into protected content.
+ */
+const UnauthenticatedRouteHandler: React.FC = () => {
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const currentHash = window.location.hash;
+      const currentPath = window.location.pathname;
+
+      // Sanitize URL: if visitor opened /dashboard, /#employees, etc., redirect to login
+      if (currentHash && currentHash !== '#/' && currentHash !== '#/login') {
+        window.history.replaceState(null, '', '/#login');
+      } else if (currentPath && currentPath !== '/') {
+        window.history.replaceState(null, '', '/#login');
+      }
+
+      // Trap history Back/Forward navigation while unauthenticated
+      const blockHistoryNavigation = () => {
+        window.history.replaceState(null, '', '/#login');
+      };
+
+      window.addEventListener('popstate', blockHistoryNavigation);
+      window.addEventListener('hashchange', blockHistoryNavigation);
+      return () => {
+        window.removeEventListener('popstate', blockHistoryNavigation);
+        window.removeEventListener('hashchange', blockHistoryNavigation);
+      };
+    }
+  }, []);
+
+  return <LoginView />;
+};
+
 const RootApp: React.FC = () => {
   const {
     isAuthenticated,
@@ -342,21 +496,23 @@ const RootApp: React.FC = () => {
     isLoadingAuth,
     logout,
   } = useAuth();
-  const [isLoginHelpOpen, setIsLoginHelpOpen] = useState(false);
 
-  // Initial loader
+  // 1. Centralized Authentication Loading Guard
+  // Displays clean corporate loading indicator while Firebase Auth initializes.
+  // Strictly prevents any protected content from flashing or rendering before auth check completes.
   if (isLoadingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F3F4F6]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 border-3 border-[#002855] border-t-transparent rounded-full animate-spin" />
-          <p className="text-[11px] font-bold text-gray-500 tracking-wider uppercase">Verifying Authentication &amp; RBAC...</p>
+          <div className="w-10 h-10 border-3 border-[#002855] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs font-bold text-gray-500 tracking-wider uppercase">Verifying Authentication &amp; RBAC...</p>
         </div>
       </div>
     );
   }
 
-  // Mandatory Email Verification Gate
+  // 2. Mandatory Email Verification Gate
+  // Require verified email addresses before granting access to the HRMS.
   const isUnverifiedState =
     isVerificationRequired ||
     (firebaseUser && !firebaseUser.emailVerified) ||
@@ -373,17 +529,14 @@ const RootApp: React.FC = () => {
     );
   }
 
-  // Not authenticated -> Login View
+  // 3. Centralized Authentication Guard:
+  // If user is not authenticated or not verified, enforce the Login page as landing page.
+  // Redirect any protected module URL entered by unauthenticated visitors to login.
   if (!isAuthenticated || !currentUser || !currentUser.emailVerified) {
-    return (
-      <>
-        <LoginView onOpenHelp={() => setIsLoginHelpOpen(true)} />
-        <HelpModal isOpen={isLoginHelpOpen} onClose={() => setIsLoginHelpOpen(false)} />
-      </>
-    );
+    return <UnauthenticatedRouteHandler />;
   }
 
-  // Only authenticated and verified users mount MainLayout
+  // 4. Fully Authenticated and Verified User: Render Protected Main Layout
   return <MainLayout />;
 };
 
