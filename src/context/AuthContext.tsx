@@ -200,7 +200,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        const isSpecialAdmin = isAuthorizedAdmin(fbUser.email);
+        const normalizedEmail = (fbUser.email || '').trim().toLowerCase();
+        const isCompanyDomain = normalizedEmail.endsWith(COMPANY_EMAIL_DOMAIN);
+        const isSpecialAdmin = isAuthorizedAdmin(normalizedEmail, fbUser.uid);
+
+        // MANDATORY DOMAIN & AUTHORIZATION GATE:
+        // Only @ethiopianre.com corporate emails or explicitly authorized admin accounts are permitted.
+        if (!isCompanyDomain && !isSpecialAdmin) {
+          console.warn('Unauthorized external email detected in session. Denying access:', normalizedEmail);
+          await signOut(auth).catch(() => {});
+          setCurrentUser(null);
+          setIsVerificationRequired(false);
+          setUnverifiedEmail(null);
+          setIsLoadingAuth(false);
+          return;
+        }
 
         // Reload user to get freshest emailVerified flag from Firebase Auth
         await fbUser.reload().catch(() => {});
@@ -456,6 +470,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 2. LOGIN METHOD (Firebase Auth + Email Verification Gate + Firestore RBAC)
   const login = useCallback(
     async (email: string, password?: string): Promise<LoginResult> => {
+      if (!email || !email.trim()) {
+        return { success: false, error: 'Please enter your corporate email address.' };
+      }
+
+      if (!password || !password.trim()) {
+        return { success: false, error: 'Please enter your password.' };
+      }
+
       const normalized = email.trim().toLowerCase();
 
       // Check allowed domain
@@ -467,10 +489,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           success: false,
           error: `Company Email Domain Restricted: Only accounts with an official ${COMPANY_EMAIL_DOMAIN} email or authorized System Administrator can sign in.`,
         };
-      }
-
-      if (!password) {
-        return { success: false, error: 'Please enter your password.' };
       }
 
       try {
