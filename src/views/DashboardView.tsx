@@ -78,11 +78,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <button
             id="dash-quick-attendance-btn"
             onClick={onOpenRecordAttendance}
-            className="flex items-center gap-2 px-3.5 py-2 rounded bg-[#002855] text-white font-bold text-xs shadow-xs hover:bg-[#004080] transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 rounded-lg bg-[#002855] text-white font-bold text-xs shadow-xs hover:bg-[#004080] transition-colors cursor-pointer"
           >
             <CalendarCheck className="w-4 h-4 text-[#D4AF37]" />
             <span>Record Attendance</span>
@@ -90,7 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             id="dash-quick-leave-btn"
             onClick={onOpenRegisterLeave}
-            className="flex items-center gap-2 px-3.5 py-2 rounded bg-[#D4AF37] text-[#002855] font-bold text-xs shadow-xs hover:bg-[#c49f2e] transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 rounded-lg bg-[#D4AF37] text-[#002855] font-bold text-xs shadow-xs hover:bg-[#c49f2e] transition-colors cursor-pointer"
           >
             <PlaneTakeoff className="w-4 h-4" />
             <span>Register Leave</span>
@@ -99,7 +99,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* STATS GRID - Signature Geometric Balance with gold border-top */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 shrink-0">
         {/* Active Employees */}
         <div
           onClick={() => onNavigateTo('employees')}

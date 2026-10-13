@@ -277,13 +277,13 @@ export const LoginView: React.FC<LoginViewProps> = () => {
         <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200/40">
           {/* Left Column: Brand & Security Guarantee */}
           <div
-            className="lg:col-span-5 p-8 text-white flex flex-col justify-between relative overflow-hidden"
+            className="lg:col-span-5 p-6 sm:p-8 text-white flex flex-col justify-between relative overflow-hidden"
             style={{ backgroundColor: '#002855' }}
           >
             <div className="absolute -right-16 -bottom-16 w-64 h-64 rounded-full bg-white/5 pointer-events-none" />
             <div className="absolute -left-12 -top-12 w-48 h-48 rounded-full bg-[#D4AF37]/10 pointer-events-none" />
 
-            <div className="relative z-10 space-y-6">
+            <div className="relative z-10 space-y-4 lg:space-y-6">
               <div className="flex items-center justify-between">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-semibold text-[#D4AF37]">
                   <ShieldCheck className="w-3.5 h-3.5" />
@@ -292,19 +292,19 @@ export const LoginView: React.FC<LoginViewProps> = () => {
               </div>
 
               <div>
-                <div className="mb-3 p-2 bg-white/10 rounded-xl inline-block border border-white/15 backdrop-blur-xs">
+                <div className="mb-2 sm:mb-3 p-2 bg-white/10 rounded-xl inline-block border border-white/15 backdrop-blur-xs">
                   <EthioReLogo size="md" showText={false} />
                 </div>
-                <h1 className="text-2xl font-bold tracking-tight text-white leading-tight">
+                <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white leading-tight">
                   Human Resource Management System
                 </h1>
-                <p className="text-xs text-blue-200/90 mt-2 leading-relaxed">
+                <p className="text-xs text-blue-200/90 mt-1.5 sm:mt-2 leading-relaxed">
                   Pioneer National Reinsurer of Ethiopia. Enterprise identity governance with strict corporate email domain verification and two-tier role-based access.
                 </p>
               </div>
 
-              {/* Security & Feature Pillars */}
-              <div className="space-y-2.5 pt-1">
+              {/* Security & Feature Pillars (Visible on Desktop / Tablets) */}
+              <div className="hidden lg:block space-y-2.5 pt-1">
                 <div className="text-[11px] font-bold uppercase tracking-widest text-[#D4AF37]">
                   Enterprise HRMS Capabilities
                 </div>
@@ -331,15 +331,15 @@ export const LoginView: React.FC<LoginViewProps> = () => {
               </div>
             </div>
 
-            {/* Bottom Compliance Tag */}
-            <div className="relative z-10 pt-6 border-t border-white/10 text-[11px] text-blue-200/70 flex items-center justify-between">
+            {/* Bottom Compliance Tag (Visible on Desktop) */}
+            <div className="hidden lg:flex relative z-10 pt-6 border-t border-white/10 text-[11px] text-blue-200/70 items-center justify-between">
               <span>Proclamation No. 1156/2019</span>
               <span className="font-mono text-[10px]">TLS 256-Bit</span>
             </div>
           </div>
 
           {/* Right Column: Forms */}
-          <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-between bg-white">
+          <div className="lg:col-span-7 p-5 sm:p-8 lg:p-10 flex flex-col justify-between bg-white">
             {/* 1. LOGIN FORM */}
             {mode === 'login' && (
               <div className="space-y-6">
@@ -402,7 +402,7 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                       Corporate Email Address
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         id="input-login-email"
                         type="email"
@@ -410,7 +410,7 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         placeholder="e.g. user@ethiopianre.com"
-                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 text-xs placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#002855] focus:border-[#002855]"
+                        className="w-full pl-9 pr-3 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-lg text-slate-900 text-sm sm:text-xs placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#002855] focus:border-[#002855]"
                       />
                     </div>
                   </div>
@@ -428,13 +428,13 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                           setErrorMessage(null);
                           setSuccessNotice(null);
                         }}
-                        className="text-xs text-[#002855] hover:text-[#004080] font-semibold hover:underline cursor-pointer"
+                        className="text-xs text-[#002855] hover:text-[#004080] font-semibold hover:underline cursor-pointer py-1"
                       >
                         Forgot password?
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       <input
                         id="input-login-password"
                         type={showPassword ? 'text' : 'password'}
@@ -442,12 +442,13 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="Enter account password"
-                        className="w-full pl-9 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 text-xs placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#002855] focus:border-[#002855]"
+                        className="w-full pl-9 pr-11 py-2.5 min-h-[44px] bg-slate-50 border border-slate-300 rounded-lg text-slate-900 text-sm sm:text-xs placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#002855] focus:border-[#002855]"
                       />
                       <button
                         type="button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 cursor-pointer min-h-[36px] min-w-[36px] flex items-center justify-center"
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -455,12 +456,12 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <label className="flex items-center gap-2 cursor-pointer select-none py-1">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="rounded border-slate-300 text-[#002855] focus:ring-[#002855]"
+                        className="w-4 h-4 rounded border-slate-300 text-[#002855] focus:ring-[#002855]"
                       />
                       <span className="text-slate-600 text-xs">Keep me signed in on this device</span>
                     </label>
@@ -470,7 +471,7 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                     id="btn-login-submit"
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-2.5 px-4 rounded-lg text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm hover:opacity-95 cursor-pointer transition-all disabled:opacity-50"
+                    className="w-full py-3 px-4 min-h-[44px] rounded-lg text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm hover:opacity-95 cursor-pointer transition-all disabled:opacity-50"
                     style={{ backgroundColor: '#002855' }}
                   >
                     {isLoading ? (
@@ -488,7 +489,7 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                 </form>
 
                 {/* Sign Up / Registration Link */}
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                   <div>
                     <div className="font-bold text-slate-800">New Employee / HR Officer?</div>
                     <div className="text-[11px] text-slate-500">Register with your @ethiopianre.com address</div>
@@ -501,7 +502,7 @@ export const LoginView: React.FC<LoginViewProps> = () => {
                       setErrorMessage(null);
                       setSuccessNotice(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-[#002855] text-white font-bold text-xs hover:bg-[#003870] transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="w-full sm:w-auto px-4 py-2 min-h-[38px] rounded-lg bg-[#002855] text-white font-bold text-xs hover:bg-[#003870] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <UserPlus className="w-3.5 h-3.5 text-[#D4AF37]" />
                     <span>Sign Up</span>

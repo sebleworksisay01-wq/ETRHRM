@@ -334,22 +334,22 @@ export const FirestoreRulesModal: React.FC<FirestoreRulesModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 border-t border-gray-200 px-6 py-3.5 flex items-center justify-between shrink-0">
+        <div className="bg-gray-50 border-t border-gray-200 px-6 py-3.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
           <button
             type="button"
             onClick={handleVerify}
             disabled={isVerifying}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 min-h-[40px] rounded-lg border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isVerifying ? 'animate-spin' : ''}`} />
             <span>{isVerifying ? 'Checking Status...' : 'Verify Published Rules'}</span>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-[#002855] hover:bg-[#001f44] text-white text-xs font-semibold cursor-pointer transition-colors"
+              className="w-full sm:w-auto px-4 py-2.5 min-h-[40px] rounded-lg bg-[#002855] hover:bg-[#001f44] text-white text-xs font-semibold cursor-pointer transition-colors text-center"
             >
               Continue in Local Mode
             </button>

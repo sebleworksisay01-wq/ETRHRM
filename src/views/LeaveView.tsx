@@ -549,7 +549,7 @@ export const LeaveView: React.FC = () => {
 
               {/* Auto-populated details & Available Balance */}
               {selectedEmp && currentTypeBalance && (
-                <div className="grid grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 text-[11px]">
                   <div>
                     <span className="text-slate-500 block">Department:</span>
                     <strong className="text-slate-800">{selectedEmp.departmentName}</strong>
@@ -589,7 +589,7 @@ export const LeaveView: React.FC = () => {
               </div>
 
               {/* Date Pickers */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Start Date <span className="text-rose-500">*</span>
@@ -689,18 +689,18 @@ export const LeaveView: React.FC = () => {
               )}
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 min-h-[40px] rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="btn-save-leave-record"
-                  className="px-5 py-2 rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 min-h-[40px] rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer text-center"
                   style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
                 >
                   Save &amp; Finalize Leave
@@ -713,10 +713,10 @@ export const LeaveView: React.FC = () => {
 
       {/* View Leave Record Details Modal */}
       {viewingLeave && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in-95 duration-150">
             <div
-              className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 text-white"
+              className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 text-white shrink-0"
               style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
             >
               <div className="flex items-center gap-2">

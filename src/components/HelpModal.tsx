@@ -86,10 +86,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Content Body with Left Sidebar */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Navigation */}
-          <div className="w-64 border-r border-slate-200 bg-slate-50/50 p-2 overflow-y-auto shrink-0 space-y-1">
+        {/* Content Body with Responsive Left Navigation */}
+        <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+          {/* Topics Navigation: horizontal scroll on mobile, vertical sidebar on desktop */}
+          <div className="w-full md:w-64 border-b md:border-b-0 md:border-r border-slate-200 bg-slate-50/80 p-2 overflow-x-auto md:overflow-y-auto shrink-0 flex md:flex-col gap-1.5 scrollbar-thin">
             {filteredTopics.map((topic) => {
               const Icon = topic.icon;
               const isActive = activeTopic === topic.id;
@@ -98,7 +98,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                   key={topic.id}
                   id={`help-topic-${topic.id}`}
                   onClick={() => setActiveTopic(topic.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left text-xs font-semibold transition-all cursor-pointer ${
+                  className={`flex items-center justify-between px-3 py-2 md:py-2.5 rounded-lg text-left text-xs font-semibold transition-all cursor-pointer shrink-0 md:shrink whitespace-nowrap md:whitespace-normal ${
                     isActive
                       ? 'bg-blue-50 text-blue-950 font-bold shadow-xs'
                       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
@@ -111,18 +111,18 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                       : undefined
                   }
                 >
-                  <div className="flex items-center gap-2.5 truncate">
+                  <div className="flex items-center gap-2 truncate">
                     <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-amber-600' : 'text-slate-400'}`} />
                     <span className="truncate">{topic.label}</span>
                   </div>
-                  {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                  {isActive && <ChevronRight className="w-3.5 h-3.5 text-blue-600 shrink-0 hidden md:inline" />}
                 </button>
               );
             })}
           </div>
 
           {/* Right Topic Details */}
-          <div className="flex-1 p-6 overflow-y-auto text-sm text-slate-700 space-y-4">
+          <div className="flex-1 p-4 sm:p-6 overflow-y-auto text-sm text-slate-700 space-y-4">
             {activeTopic === 'getting-started' && (
               <div className="space-y-4">
                 <h3 className="text-xl font-bold text-slate-900">Welcome to Ethio-Re HRMS</h3>

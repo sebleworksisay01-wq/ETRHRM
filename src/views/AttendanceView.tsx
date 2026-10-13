@@ -537,11 +537,11 @@ export const AttendanceView: React.FC = () => {
 
       {/* Record / Edit Attendance Modal */}
       {isRecordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div
-              className="flex items-center justify-between px-6 py-4 border-b border-slate-200 text-white"
+              className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 text-white shrink-0"
               style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
             >
               <div className="flex items-center gap-2.5">
@@ -564,7 +564,7 @@ export const AttendanceView: React.FC = () => {
             </div>
 
             {/* Modal Form */}
-            <form onSubmit={handleSaveAttendance} className="p-6 space-y-4 text-xs">
+            <form onSubmit={handleSaveAttendance} className="p-5 sm:p-6 overflow-y-auto space-y-4 text-xs">
               {formError && (
                 <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -582,7 +582,7 @@ export const AttendanceView: React.FC = () => {
                   disabled={!!editingRecord}
                   value={formEmployeeId}
                   onChange={(e) => setFormEmployeeId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-xs disabled:opacity-75 disabled:bg-slate-100"
+                  className="w-full px-3 py-2.5 min-h-[42px] bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-xs disabled:opacity-75 disabled:bg-slate-100"
                 >
                   {activeEmployees.map((emp) => (
                     <option key={emp.id} value={emp.employeeId}>
@@ -594,7 +594,7 @@ export const AttendanceView: React.FC = () => {
 
               {/* Automatically Populated Info Pill */}
               {selectedEmployeeObj && (
-                <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-200/70 flex items-center justify-between text-[11px]">
+                <div className="p-3 rounded-lg bg-blue-50/70 border border-blue-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px]">
                   <div>
                     <span className="text-slate-500">Auto-Populated ID: </span>
                     <strong className="font-mono text-blue-900">{selectedEmployeeObj.employeeId}</strong>
@@ -607,7 +607,7 @@ export const AttendanceView: React.FC = () => {
               )}
 
               {/* Date & Status */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Attendance Date <span className="text-rose-500">*</span>
@@ -641,7 +641,7 @@ export const AttendanceView: React.FC = () => {
               </div>
 
               {/* Check-In & Check-Out Times */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Check-In Time</label>
                   <input
@@ -678,18 +678,18 @@ export const AttendanceView: React.FC = () => {
               </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsRecordModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 min-h-[40px] rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="btn-save-attendance-record"
-                  className="px-5 py-2 rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                  className="w-full sm:w-auto px-5 py-2.5 min-h-[40px] rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer text-center"
                   style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
                 >
                   {editingRecord ? 'Save Attendance Correction' : 'Finalize Attendance'}

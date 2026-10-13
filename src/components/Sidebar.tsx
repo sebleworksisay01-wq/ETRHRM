@@ -17,8 +17,8 @@ import {
   Scale,
   Bell,
   Key,
-  Sliders,
-  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useHRMS } from '../context/HRMSContext';
@@ -29,6 +29,8 @@ interface SidebarProps {
   onSelectTab: (tab: ActiveTab) => void;
   isOpen: boolean;
   onClose: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -36,6 +38,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   isOpen,
   onClose,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const { isAdmin, isHRAdmin, isEmployee, currentUser } = useAuth();
   const { branding, companyProfile } = useHRMS();
@@ -55,25 +59,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const hasValidSidebarLogo = Boolean(logoSrc && !sidebarLogoErr);
 
+  const renderNavItem = (
+    tabKey: ActiveTab,
+    label: string,
+    IconComponent: React.FC<{ className?: string }>,
+    elementId?: string
+  ) => {
+    const isActive = activeTab === tabKey;
+    return (
+      <div
+        id={elementId}
+        key={tabKey}
+        onClick={() => handleNavClick(tabKey)}
+        title={label}
+        className={`sidebar-item flex items-center min-h-[44px] cursor-pointer text-sm font-medium transition-colors ${
+          isCollapsed ? 'px-6 md:px-0 md:justify-center py-3' : 'px-6 py-3 gap-3'
+        } ${isActive ? 'active' : 'text-[#ffffffcc]'}`}
+      >
+        <IconComponent className="w-5 h-5 opacity-80 shrink-0" />
+        <span className={isCollapsed ? 'md:hidden truncate' : 'truncate'}>{label}</span>
+      </div>
+    );
+  };
+
   return (
     <>
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop with smooth touch dismissal */}
       {isOpen && (
         <div
           onClick={onClose}
-          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-xs md:hidden transition-opacity"
+          aria-hidden="true"
         />
       )}
 
       <aside
         id="app-sidebar"
-        className={`fixed lg:static top-0 bottom-0 left-0 z-40 w-64 text-white flex flex-col shrink-0 border-r border-[#ffffff1a] transition-transform duration-200 ease-in-out lg:translate-x-0 ${
+        className={`fixed md:static top-0 bottom-0 left-0 z-40 text-white flex flex-col shrink-0 border-r border-[#ffffff1a] transition-all duration-200 ease-in-out md:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${
+          isCollapsed ? 'w-72 md:w-20' : 'w-72 md:w-64'
         }`}
         style={{ backgroundColor: 'var(--primary-color, #002855)' }}
       >
         {/* Sidebar Header with Dynamic Logo */}
-        <div className="p-5 flex items-center justify-between border-b border-[#ffffff1a]">
+        <div className={`p-4 sm:p-5 flex items-center ${isCollapsed ? 'md:justify-center' : 'justify-between'} border-b border-[#ffffff1a]`}>
           <div className="flex items-center gap-3 min-w-0">
             {hasValidSidebarLogo ? (
               <img
@@ -104,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </svg>
               </div>
             )}
-            <div className="min-w-0">
+            <div className={`min-w-0 ${isCollapsed ? 'md:hidden' : ''}`}>
               <h1 className="text-sm font-bold leading-tight tracking-tight text-white truncate max-w-[130px]">
                 {companyProfile?.shortName || companyProfile?.displayName || 'ETHIO-RE'}
               </h1>
@@ -115,193 +145,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-md text-white/60 hover:text-white lg:hidden cursor-pointer"
+            aria-label="Close navigation menu"
+            className="p-2 rounded-md text-white/70 hover:text-white md:hidden cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Dynamic Navigation Items (Requirement 10: Administrator vs HR Admin vs Employee) */}
-        <nav className="flex-1 overflow-y-auto py-4">
-          {/* CASE 1: EMPLOYEE ROLE NAVIGATION (Requirement 10) */}
-          {/* Show only: My Profile, My Attendance, My Leave, My Leave Balance, My Notifications, Account Settings */}
+        {/* Dynamic Navigation Items */}
+        <nav className="flex-1 overflow-y-auto py-3 space-y-0.5">
+          {/* CASE 1: EMPLOYEE ROLE NAVIGATION */}
           {isEmployee && (
-            <div className="space-y-1">
-              <div className="px-6 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold">
+            <div className="space-y-0.5">
+              <div className={`px-6 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold ${isCollapsed ? 'md:hidden' : ''}`}>
                 Self-Service Portal
               </div>
-
-              {/* My Profile */}
-              <div
-                id="nav-my-profile"
-                onClick={() => handleNavClick('my-profile')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'my-profile' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <User className="w-5 h-5 opacity-80" />
-                <span>My Profile</span>
-              </div>
-
-              {/* My Attendance */}
-              <div
-                id="nav-my-attendance"
-                onClick={() => handleNavClick('my-attendance')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'my-attendance' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <CalendarCheck className="w-5 h-5 opacity-80" />
-                <span>My Attendance</span>
-              </div>
-
-              {/* My Leave */}
-              <div
-                id="nav-my-leave"
-                onClick={() => handleNavClick('my-leave')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'my-leave' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <PlaneTakeoff className="w-5 h-5 opacity-80" />
-                <span>My Leave</span>
-              </div>
-
-              {/* My Leave Balance */}
-              <div
-                id="nav-my-leave-balance"
-                onClick={() => handleNavClick('my-leave-balance')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'my-leave-balance' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <Scale className="w-5 h-5 opacity-80" />
-                <span>My Leave Balance</span>
-              </div>
-
-              {/* My Notifications */}
-              <div
-                id="nav-my-notifications"
-                onClick={() => handleNavClick('my-notifications')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'my-notifications' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <Bell className="w-5 h-5 opacity-80" />
-                <span>My Notifications</span>
-              </div>
-
-              {/* Account Settings */}
-              <div
-                id="nav-account-settings"
-                onClick={() => handleNavClick('account-settings')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'account-settings' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <Key className="w-5 h-5 opacity-80" />
-                <span>Account Settings</span>
-              </div>
+              {renderNavItem('my-profile', 'My Profile', User, 'nav-my-profile')}
+              {renderNavItem('my-attendance', 'My Attendance', CalendarCheck, 'nav-my-attendance')}
+              {renderNavItem('my-leave', 'My Leave', PlaneTakeoff, 'nav-my-leave')}
+              {renderNavItem('my-leave-balance', 'My Leave Balance', Scale, 'nav-my-leave-balance')}
+              {renderNavItem('my-notifications', 'My Notifications', Bell, 'nav-my-notifications')}
+              {renderNavItem('account-settings', 'Account Settings', Key, 'nav-account-settings')}
             </div>
           )}
 
-          {/* CASE 2 & 3: HR ADMIN & ADMINISTRATOR NAVIGATION (Requirement 10) */}
+          {/* CASE 2 & 3: HR ADMIN & ADMINISTRATOR NAVIGATION */}
           {!isEmployee && (
             <>
-              <div className="px-6 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold">
+              <div className={`px-6 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold ${isCollapsed ? 'md:hidden' : ''}`}>
                 HR Modules
               </div>
+              {renderNavItem('dashboard', 'Dashboard', LayoutDashboard, 'nav-dashboard')}
+              {renderNavItem('attendance', 'Attendance', CalendarCheck, 'nav-attendance')}
+              {renderNavItem('leave', 'Leave Management', PlaneTakeoff, 'nav-leave')}
+              {renderNavItem('employees', 'Employees', Users, 'nav-employees')}
+              {renderNavItem('departments', 'Departments', Building2, 'nav-departments')}
+              {renderNavItem('reports', 'Reports', FileSpreadsheet, 'nav-reports')}
 
-              {/* Dashboard */}
-              <div
-                id="nav-dashboard"
-                onClick={() => handleNavClick('dashboard')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'dashboard' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <LayoutDashboard className="w-5 h-5 opacity-80" />
-                <span>Dashboard</span>
-              </div>
-
-              {/* Attendance */}
-              <div
-                id="nav-attendance"
-                onClick={() => handleNavClick('attendance')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'attendance' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <CalendarCheck className="w-5 h-5 opacity-80" />
-                <span>Attendance</span>
-              </div>
-
-              {/* Leave Management */}
-              <div
-                id="nav-leave"
-                onClick={() => handleNavClick('leave')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'leave' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <PlaneTakeoff className="w-5 h-5 opacity-80" />
-                <span>Leave Management</span>
-              </div>
-
-              {/* Employee Master Data */}
-              <div
-                id="nav-employees"
-                onClick={() => handleNavClick('employees')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'employees' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <Users className="w-5 h-5 opacity-80" />
-                <span>Employees</span>
-              </div>
-
-              {/* Departments */}
-              <div
-                id="nav-departments"
-                onClick={() => handleNavClick('departments')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'departments' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <Building2 className="w-5 h-5 opacity-80" />
-                <span>Departments</span>
-              </div>
-
-              {/* Reports */}
-              <div
-                id="nav-reports"
-                onClick={() => handleNavClick('reports')}
-                className={`sidebar-item px-6 py-3 flex items-center gap-3 cursor-pointer text-sm font-medium ${
-                  activeTab === 'reports' ? 'active' : 'text-[#ffffffcc]'
-                }`}
-              >
-                <FileSpreadsheet className="w-5 h-5 opacity-80" />
-                <span>Reports</span>
-              </div>
-
-              {/* CASE 3: ADMINISTRATOR ONLY: Admin Configuration (Requirement 2 & 9) */}
-              {/* Standalone Role menu REMOVED; RBAC accessible via Admin Configuration -> RBAC */}
+              {/* ADMINISTRATOR ONLY: Admin Configuration */}
               {isAdmin && (
-                <div>
-                  <div className="px-6 mt-6 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold">
+                <div className="pt-2">
+                  <div className={`px-6 mt-4 mb-2 text-[11px] uppercase tracking-widest text-[#ffffff60] font-semibold ${isCollapsed ? 'md:hidden' : ''}`}>
                     System Administration
                   </div>
 
                   <div
-                    onClick={() => setAdminConfigExpanded(!adminConfigExpanded)}
-                    className="px-6 py-2.5 flex items-center justify-between text-xs font-semibold text-[#ffffffb3] hover:bg-[#003366] cursor-pointer"
+                    onClick={() => {
+                      if (isCollapsed && onToggleCollapse) {
+                        onToggleCollapse();
+                      }
+                      setAdminConfigExpanded(!adminConfigExpanded);
+                    }}
+                    title="Admin Configuration"
+                    className={`sidebar-item flex items-center min-h-[44px] cursor-pointer text-xs font-semibold text-[#ffffffb3] hover:bg-[#003366] transition-colors ${
+                      isCollapsed ? 'px-6 md:px-0 md:justify-center py-2.5' : 'px-6 py-2.5 justify-between'
+                    }`}
                   >
                     <div className="flex items-center gap-2.5">
-                      <Settings className="w-4 h-4 text-[#D4AF37]" />
-                      <span className="text-sm font-medium">Admin Configuration</span>
+                      <Settings className="w-4 h-4 text-[#D4AF37] shrink-0" />
+                      <span className={`text-sm font-medium ${isCollapsed ? 'md:hidden' : ''}`}>
+                        Admin Configuration
+                      </span>
                     </div>
                     <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 opacity-70 ${
+                      className={`w-3.5 h-3.5 transition-transform duration-200 opacity-70 ${isCollapsed ? 'md:hidden' : ''} ${
                         adminConfigExpanded ? 'rotate-180' : ''
                       }`}
                     />
@@ -309,52 +216,52 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                   {adminConfigExpanded && (
                     <div className="space-y-0.5">
-                      {/* 1. RBAC (Requirement 2 & 3) */}
                       <div
                         id="nav-rbac"
                         onClick={() => handleNavClick('roles')}
-                        className={`sidebar-item pl-11 pr-6 py-2.5 flex items-center gap-2.5 cursor-pointer text-xs ${
-                          activeTab === 'roles' ? 'active' : 'text-[#ffffffb3]'
-                        }`}
+                        title="RBAC"
+                        className={`sidebar-item flex items-center min-h-[40px] cursor-pointer text-xs ${
+                          isCollapsed ? 'pl-6 md:pl-0 md:justify-center py-2' : 'pl-11 pr-6 py-2 gap-2.5'
+                        } ${activeTab === 'roles' ? 'active' : 'text-[#ffffffb3]'}`}
                       >
-                        <Shield className="w-4 h-4 text-[#D4AF37] opacity-80" />
-                        <span className="font-medium">RBAC</span>
+                        <Shield className="w-4 h-4 text-[#D4AF37] opacity-80 shrink-0" />
+                        <span className={isCollapsed ? 'md:hidden font-medium' : 'font-medium'}>RBAC</span>
                       </div>
 
-                      {/* 2. User Management (Requirement 6) */}
                       <div
                         id="nav-users"
                         onClick={() => handleNavClick('users')}
-                        className={`sidebar-item pl-11 pr-6 py-2.5 flex items-center gap-2.5 cursor-pointer text-xs ${
-                          activeTab === 'users' ? 'active' : 'text-[#ffffffb3]'
-                        }`}
+                        title="User Management"
+                        className={`sidebar-item flex items-center min-h-[40px] cursor-pointer text-xs ${
+                          isCollapsed ? 'pl-6 md:pl-0 md:justify-center py-2' : 'pl-11 pr-6 py-2 gap-2.5'
+                        } ${activeTab === 'users' ? 'active' : 'text-[#ffffffb3]'}`}
                       >
-                        <UserCog className="w-4 h-4 opacity-75" />
-                        <span className="font-medium">User Management</span>
+                        <UserCog className="w-4 h-4 opacity-75 shrink-0" />
+                        <span className={isCollapsed ? 'md:hidden font-medium' : 'font-medium'}>User Management</span>
                       </div>
 
-                      {/* 3. Company Profile */}
                       <div
                         id="nav-company-profile"
                         onClick={() => handleNavClick('settings')}
-                        className={`sidebar-item pl-11 pr-6 py-2.5 flex items-center gap-2.5 cursor-pointer text-xs ${
-                          activeTab === 'settings' ? 'active' : 'text-[#ffffffb3]'
-                        }`}
+                        title="Company Profile"
+                        className={`sidebar-item flex items-center min-h-[40px] cursor-pointer text-xs ${
+                          isCollapsed ? 'pl-6 md:pl-0 md:justify-center py-2' : 'pl-11 pr-6 py-2 gap-2.5'
+                        } ${activeTab === 'settings' ? 'active' : 'text-[#ffffffb3]'}`}
                       >
-                        <Building2 className="w-4 h-4 opacity-75" />
-                        <span className="font-medium">Company Profile</span>
+                        <Building2 className="w-4 h-4 opacity-75 shrink-0" />
+                        <span className={isCollapsed ? 'md:hidden font-medium' : 'font-medium'}>Company Profile</span>
                       </div>
 
-                      {/* 4. Audit Logs */}
                       <div
                         id="nav-activity"
                         onClick={() => handleNavClick('activity')}
-                        className={`sidebar-item pl-11 pr-6 py-2.5 flex items-center gap-2.5 cursor-pointer text-xs ${
-                          activeTab === 'activity' ? 'active' : 'text-[#ffffffb3]'
-                        }`}
+                        title="Audit Logs"
+                        className={`sidebar-item flex items-center min-h-[40px] cursor-pointer text-xs ${
+                          isCollapsed ? 'pl-6 md:pl-0 md:justify-center py-2' : 'pl-11 pr-6 py-2 gap-2.5'
+                        } ${activeTab === 'activity' ? 'active' : 'text-[#ffffffb3]'}`}
                       >
-                        <Activity className="w-4 h-4 opacity-75" />
-                        <span className="font-medium">Audit Logs</span>
+                        <Activity className="w-4 h-4 opacity-75 shrink-0" />
+                        <span className={isCollapsed ? 'md:hidden font-medium' : 'font-medium'}>Audit Logs</span>
                       </div>
                     </div>
                   )}
@@ -362,7 +269,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               )}
 
               {/* Restricted notice for HR Admin */}
-              {isHRAdmin && !isAdmin && (
+              {isHRAdmin && !isAdmin && !isCollapsed && (
                 <div
                   className="mx-4 mt-6 p-3 rounded-lg bg-black/20 text-[11px] text-[#ffffffcc]"
                   style={{ borderLeft: '3px solid var(--accent-color, #D4AF37)' }}
@@ -380,30 +287,60 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </nav>
 
-        {/* Sidebar Footer: Logged in User Card */}
-        <div className="p-4 mt-auto border-t border-[#ffffff1a]">
-          <div className="bg-black/20 rounded-lg p-3 text-center border border-white/10">
-            <p className="text-[10px] text-[#ffffff80] uppercase mb-0.5 tracking-widest font-semibold">
-              Logged in as
-            </p>
-            <div className="inline-flex items-center gap-1">
-              <span
-                className={`text-xs font-bold ${
-                  isAdmin
-                    ? 'text-[#D4AF37]'
-                    : isHRAdmin
-                    ? 'text-amber-300'
-                    : 'text-emerald-300'
-                }`}
-              >
-                {currentUser?.role === 'HR Officer' ? 'HR Admin' : currentUser?.role || 'Employee'}
-              </span>
-            </div>
-            <p
-              className="text-[11px] font-medium mt-0.5 truncate text-white"
+        {/* Tablet / Desktop Collapse / Expand Toggle Button */}
+        {onToggleCollapse && (
+          <div className="px-3 py-2 border-t border-[#ffffff1a] hidden md:flex items-center justify-center">
+            <button
+              onClick={onToggleCollapse}
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="w-full flex items-center justify-center gap-2 py-2 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+              title={isCollapsed ? 'Expand navigation panel' : 'Collapse navigation panel'}
             >
-              {currentUser?.fullName}
-            </p>
+              {isCollapsed ? (
+                <ChevronRight className="w-4 h-4 text-[#D4AF37]" />
+              ) : (
+                <>
+                  <ChevronLeft className="w-4 h-4 text-[#D4AF37]" />
+                  <span>Collapse Menu</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* Sidebar Footer: Logged in User Card */}
+        <div className="p-3 sm:p-4 mt-auto border-t border-[#ffffff1a]">
+          <div className={`bg-black/20 rounded-lg p-2.5 text-center border border-white/10 ${isCollapsed ? 'md:p-2' : ''}`}>
+            {isCollapsed ? (
+              <div
+                className="hidden md:flex w-8 h-8 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37] items-center justify-center font-bold text-[#D4AF37] text-xs mx-auto"
+                title={`${currentUser?.fullName || 'User'} (${currentUser?.role})`}
+              >
+                {currentUser?.fullName?.charAt(0) || 'U'}
+              </div>
+            ) : null}
+
+            <div className={isCollapsed ? 'md:hidden' : ''}>
+              <p className="text-[10px] text-[#ffffff80] uppercase mb-0.5 tracking-widest font-semibold">
+                Logged in as
+              </p>
+              <div className="inline-flex items-center gap-1">
+                <span
+                  className={`text-xs font-bold ${
+                    isAdmin
+                      ? 'text-[#D4AF37]'
+                      : isHRAdmin
+                      ? 'text-amber-300'
+                      : 'text-emerald-300'
+                  }`}
+                >
+                  {currentUser?.role === 'HR Officer' ? 'HR Admin' : currentUser?.role || 'Employee'}
+                </span>
+              </div>
+              <p className="text-[11px] font-medium mt-0.5 truncate text-white">
+                {currentUser?.fullName}
+              </p>
+            </div>
           </div>
         </div>
       </aside>

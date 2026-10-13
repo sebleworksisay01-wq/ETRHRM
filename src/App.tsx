@@ -160,6 +160,7 @@ const MainLayout: React.FC = () => {
   });
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
@@ -233,6 +234,8 @@ const MainLayout: React.FC = () => {
         onSelectTab={handleNavigate}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
       {/* Main Content Column */}
@@ -244,6 +247,8 @@ const MainLayout: React.FC = () => {
           onOpenProfile={() => setIsProfileOpen(true)}
           onOpenNotifications={() => setIsNotificationsOpen(true)}
           onNavigateTo={handleNavigate}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         />
 
         {/* Firestore Rules Banner when permission issues occur */}
@@ -265,7 +270,7 @@ const MainLayout: React.FC = () => {
         )}
 
         {/* Dynamic Content View Area - Protected Route Boundaries */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8">
           <div className="max-w-7xl mx-auto w-full">
             {/* Self-Service Portal for Employees and staff self-service */}
             {isSelfServiceTab && (
@@ -410,11 +415,11 @@ const MainLayout: React.FC = () => {
         </main>
 
         {/* Corporate Geometric Balance Footer */}
-        <footer className="h-10 bg-white border-t border-gray-200 flex items-center justify-between px-6 sm:px-8 text-[11px] text-gray-400 shrink-0 select-none">
-          <p>
+        <footer className="h-auto sm:h-10 py-2 sm:py-0 bg-white border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between px-4 sm:px-8 text-[11px] text-gray-400 shrink-0 select-none gap-2">
+          <p className="text-center sm:text-left">
             &copy; 2026 {companyProfile?.displayName || 'Ethiopian Reinsurance S.C.'} HRMS. All Rights Reserved.
           </p>
-          <div className="flex items-center gap-4 uppercase tracking-tight font-bold text-[10px]">
+          <div className="flex items-center gap-3 sm:gap-4 uppercase tracking-tight font-bold text-[10px] flex-wrap justify-center">
             <span className="flex items-center gap-1.5">
               <span
                 className={`w-1.5 h-1.5 rounded-full ${

@@ -50,18 +50,18 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <p>{message}</p>
         </div>
 
-        <div className="flex items-center justify-end gap-2.5 px-5 py-3.5 bg-slate-50 border-t border-slate-100">
+        <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 px-5 py-3.5 bg-slate-50 border-t border-slate-100">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+            className="w-full sm:w-auto px-4 py-2.5 min-h-[40px] rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer text-center"
           >
             {cancelText}
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className={`px-4 py-2 rounded-lg text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-90 cursor-pointer ${
+            className={`w-full sm:w-auto px-4 py-2.5 min-h-[40px] rounded-lg text-xs font-semibold text-white shadow-xs transition-opacity hover:opacity-90 cursor-pointer text-center ${
               isDestructive ? 'bg-rose-600' : 'bg-blue-900'
             }`}
           >

@@ -1562,7 +1562,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Name Fields: First, Middle, Last */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     First Name <span className="text-rose-500">*</span>
@@ -1606,7 +1606,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Gender & DOB */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Gender</label>
                   <select
@@ -1631,7 +1631,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Department & Position */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Department <span className="text-rose-500">*</span>
@@ -1675,7 +1675,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Employment Type & Status */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Employment Type</label>
                   <select
@@ -1707,7 +1707,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Contacts */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">
                     Email Address <span className="text-rose-500">*</span>
@@ -1735,7 +1735,7 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Address & Hire Date */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Office / Residential Address</label>
                   <input
@@ -1760,18 +1760,18 @@ export const EmployeeView: React.FC = () => {
               </div>
 
               {/* Form Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setIsFormModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer"
+                  className="px-4 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-center rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   id="btn-save-employee-record"
-                  className="px-5 py-2 rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+                  className="px-5 py-2.5 sm:py-2 min-h-[44px] sm:min-h-0 text-center rounded-lg text-white font-bold shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
                   style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
                 >
                   {editingEmployee ? 'Save Profile Changes' : 'Register Employee'}

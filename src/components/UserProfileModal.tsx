@@ -66,10 +66,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div
-          className="flex items-center justify-between px-6 py-4 border-b border-slate-200 text-white"
+          className="flex items-center justify-between px-5 sm:px-6 py-4 border-b border-slate-200 text-white shrink-0"
           style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
         >
           <div className="flex items-center gap-2.5">
@@ -91,7 +91,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
         </div>
 
         {/* Tab Selector */}
-        <div className="flex border-b border-slate-200 bg-slate-50">
+        <div className="flex border-b border-slate-200 bg-slate-50 shrink-0">
           <button
             id="tab-profile-info"
             onClick={() => {
@@ -122,7 +122,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ isOpen, onCl
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6 overflow-y-auto">
           {feedback && (
             <div
               className={`mb-4 p-3 rounded-lg text-xs flex items-center gap-2 ${
