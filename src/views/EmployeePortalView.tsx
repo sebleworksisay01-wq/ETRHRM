@@ -282,7 +282,7 @@ export const EmployeePortalView: React.FC<EmployeePortalViewProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-slate-500 block text-[11px]">Full Name</span>
                     <strong className="text-slate-900 font-semibold">{linkedEmployee?.fullName || currentUser?.fullName}</strong>
@@ -760,7 +760,7 @@ export const EmployeePortalView: React.FC<EmployeePortalViewProps> = ({
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">Start Date</label>
                   <input
@@ -794,17 +794,17 @@ export const EmployeePortalView: React.FC<EmployeePortalViewProps> = ({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsRequestLeaveOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-semibold cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 sm:py-2 min-h-[42px] sm:min-h-0 rounded-lg border border-slate-300 text-slate-700 font-semibold cursor-pointer text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#002855] text-white font-bold cursor-pointer hover:bg-[#003366]"
+                  className="w-full sm:w-auto px-5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-0 rounded-lg bg-[#002855] text-white font-bold cursor-pointer hover:bg-[#003366] text-center"
                 >
                   Submit
                 </button>

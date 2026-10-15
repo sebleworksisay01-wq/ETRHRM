@@ -212,11 +212,11 @@ export const ReportsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
           <button
             id="btn-report-export-csv"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-0 rounded-lg border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer text-center"
           >
             <Download className="w-4 h-4 text-slate-500" />
             <span>Export to CSV/Excel</span>
@@ -224,7 +224,7 @@ export const ReportsView: React.FC = () => {
           <button
             id="btn-report-print-pdf"
             onClick={handlePrintReport}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-white font-bold text-xs shadow-xs hover:opacity-90 transition-opacity cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 min-h-[42px] sm:min-h-0 rounded-lg text-white font-bold text-xs shadow-xs hover:opacity-90 transition-opacity cursor-pointer text-center"
             style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
           >
             <Printer className="w-4 h-4" />
