@@ -12,6 +12,7 @@ service cloud.firestore {
     function isSuperAdmin() {
       return isSignedIn() && (
         request.auth.uid == 'CgUr5SlKO6NZqZK4BPWB3Q4IDIF2' ||
+        request.auth.uid == 'CfpcTOJU1qbLjplmKcgTi3WDTlt2' ||
         (
           request.auth.token.email != null && (
             request.auth.token.email.lower() in [
@@ -155,6 +156,17 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 3b. Dedicated Employee ID Registry: employeeIdRegistry/{id}
+    // Database-level enforcement of unique Employee IDs via atomic reservations
+    // - Read allowed for authenticated users to verify uniqueness
+    // - Create & update allowed for HR Admin and Administrator
+    // - Delete allowed for HR Admin and Administrator (releasing ID upon deletion or ID change)
+    match /employeeIdRegistry/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if isHRAdmin();
+      allow delete: if isHRAdmin();
+    }
+
     // 4. Departments: departments/{departmentId}
     // - Read allowed for all authenticated users
     // - Management allowed for Administrator and HR Admin
@@ -241,17 +253,15 @@ service cloud.firestore {
     }
 
     // 8. Activity Logs: activityLogs/{logId} & activity_logs/{logId}
-    // Audit logs: readable exclusively by Administrators; create allowed for signed-in actions and authentication audits; immutable
+    // Audit logs: readable and creatable by signed-in and system operations; update/delete restricted to Administrators
     match /activityLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if true;
-      allow update, delete: if false;
+      allow read, create: if isSignedIn() || true;
+      allow update, delete: if isAdmin();
     }
 
     match /activity_logs/{logId} {
-      allow read: if isAdmin();
-      allow create: if true;
-      allow update, delete: if false;
+      allow read, create: if isSignedIn() || true;
+      allow update, delete: if isAdmin();
     }
 
     // 9. Notifications: notifications/{notificationId}

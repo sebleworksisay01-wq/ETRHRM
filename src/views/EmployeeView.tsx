@@ -36,6 +36,9 @@ import {
   CheckSquare,
   Square,
   MinusSquare,
+  ShieldCheck,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useHRMS } from '../context/HRMSContext';
@@ -48,6 +51,12 @@ import {
   JOB_TITLE_OPTIONS,
 } from '../types/hrms';
 import { exportToCSV, printReportDocument } from '../utils/exportUtils';
+import {
+  validateEmployeeId,
+  normalizeEmployeeId,
+  auditEmployeeIdIntegrity,
+  EmployeeIdIntegrityReport,
+} from '../utils/employeeUtils';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EthioReLogo } from '../components/EthioReLogo';
 
@@ -62,6 +71,8 @@ export const EmployeeView: React.FC = () => {
     updateEmployee,
     deleteEmployee,
     getEmployeeBalance,
+    syncRegistryForExistingEmployees,
+    auditEmployeeIds,
     branding,
     companyProfile,
   } = useHRMS();
@@ -121,6 +132,27 @@ export const EmployeeView: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
 
+  // Employee ID Uniqueness & Integrity Audit state
+  const [isEmpIdUnlocked, setIsEmpIdUnlocked] = useState(false);
+  const [isIntegrityModalOpen, setIsIntegrityModalOpen] = useState(false);
+  const [isSyncingRegistry, setIsSyncingRegistry] = useState(false);
+  const [registrySyncFeedback, setRegistrySyncFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Detailed CSV / Excel import validation report state
+  const [detailedImportSummary, setDetailedImportSummary] = useState<{
+    totalRows: number;
+    successCount: number;
+    successfulList: { row: number; employeeId: string; name: string }[];
+    duplicateInFileCount: number;
+    duplicateInFileList: { row: number; employeeId: string; firstSeenRow: number }[];
+    duplicateInDbCount: number;
+    duplicateInDbList: { row: number; employeeId: string; existingName: string }[];
+    invalidIdCount: number;
+    invalidIdList: { row: number; employeeId: string; reason: string }[];
+    failedCount: number;
+    failedList: { row: number; employeeId: string; reason: string }[];
+  } | null>(null);
+
   // Form inputs state
   const [empIdInput, setEmpIdInput] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -138,9 +170,13 @@ export const EmployeeView: React.FC = () => {
   const [category, setCategory] = useState<EmployeeCategory>('Professional');
   const [dateOfHire, setDateOfHire] = useState('2024-01-01');
 
+  // Existing Data Integrity Audit (detects duplicate, missing, or inconsistent IDs)
+  const integrityAudit = useMemo(() => auditEmployeeIdIntegrity(employees), [employees]);
+
   const openAddModal = () => {
     setEditingEmployee(null);
-    // Generate next suggested ID
+    setIsEmpIdUnlocked(true);
+    // Suggest next ID based on existing count
     const nextNum = employees.length + 1;
     const suggestedId = `ER-${String(nextNum).padStart(3, '0')}`;
     setEmpIdInput(suggestedId);
@@ -164,6 +200,7 @@ export const EmployeeView: React.FC = () => {
 
   const openEditModal = (emp: Employee) => {
     setEditingEmployee(emp);
+    setIsEmpIdUnlocked(false);
     setEmpIdInput(emp.employeeId || '');
     setFirstName(emp.firstName || '');
     setMiddleName(emp.middleName || '');
@@ -192,8 +229,22 @@ export const EmployeeView: React.FC = () => {
     setIsSavingEmployee(true);
 
     try {
-      if (!empIdInput.trim() || !firstName.trim() || !lastName.trim() || !email.trim()) {
-        setFormError('Please fill all required personnel fields.');
+      const trimmedEmpId = empIdInput.trim();
+      if (!trimmedEmpId || !firstName.trim() || !lastName.trim() || !email.trim()) {
+        setFormError('Please fill all required personnel fields including Employee ID.');
+        setIsSavingEmployee(false);
+        return;
+      }
+
+      // Enforce strict uniqueness validation (detects case and surrounding space variations)
+      const validation = validateEmployeeId(
+        trimmedEmpId,
+        employees,
+        editingEmployee ? (editingEmployee.id || editingEmployee.employeeId) : undefined
+      );
+
+      if (!validation.isValid) {
+        setFormError(validation.error || 'Employee ID already exists. Please enter a unique Employee ID.');
         setIsSavingEmployee(false);
         return;
       }
@@ -216,6 +267,7 @@ export const EmployeeView: React.FC = () => {
       if (editingEmployee) {
         const empIdToUpdate = editingEmployee.id || editingEmployee.employeeId;
         const res = await updateEmployee(empIdToUpdate, {
+          employeeId: trimmedEmpId,
           firstName: firstName.trim(),
           middleName: middleName.trim(),
           lastName: lastName.trim(),
@@ -237,7 +289,7 @@ export const EmployeeView: React.FC = () => {
 
         if (!res.success) {
           console.error('Failed to update employee record:', res.error);
-          setFormError(res.error || 'Failed to update employee record. Please verify permissions and data.');
+          setFormError(res.error || 'Failed to update employee record.');
           setIsSavingEmployee(false);
           return;
         }
@@ -247,7 +299,7 @@ export const EmployeeView: React.FC = () => {
         setEditingEmployee(null);
       } else {
         const res = await addEmployee({
-          employeeId: empIdInput.trim().toUpperCase(),
+          employeeId: trimmedEmpId,
           firstName: firstName.trim(),
           middleName: middleName.trim(),
           lastName: lastName.trim(),
@@ -270,7 +322,7 @@ export const EmployeeView: React.FC = () => {
 
         if (!res.success) {
           console.error('Failed to create employee record:', res.error);
-          setFormError(res.error || 'Failed to create employee.');
+          setFormError(res.error || 'Employee ID already exists. Please enter a unique Employee ID.');
           setIsSavingEmployee(false);
           return;
         }
@@ -535,6 +587,7 @@ export const EmployeeView: React.FC = () => {
     if (!importCsvText.trim()) return;
     setIsImporting(true);
     setImportResult(null);
+    setDetailedImportSummary(null);
 
     const lines = importCsvText
       .split('\n')
@@ -566,30 +619,86 @@ export const EmployeeView: React.FC = () => {
     );
     const dataLines = hasHeader ? lines.slice(1) : lines;
 
-    let successCount = 0;
-    let skippedCount = 0;
-    const errors: string[] = [];
+    const seenFileIds = new Map<string, number>(); // normalizedId -> rowNumber
+    const duplicateInFileList: { row: number; employeeId: string; firstSeenRow: number }[] = [];
+    const duplicateInDbList: { row: number; employeeId: string; existingName: string }[] = [];
+    const invalidIdList: { row: number; employeeId: string; reason: string }[] = [];
+    const failedList: { row: number; employeeId: string; reason: string }[] = [];
+    const successfulList: { row: number; employeeId: string; name: string }[] = [];
 
     for (let i = 0; i < dataLines.length; i++) {
+      const rowNumber = i + (hasHeader ? 2 : 1);
       const line = dataLines[i];
       const cols = line.split(',').map((c) => c.replace(/^["']|["']$/g, '').trim());
 
       if (cols.length < 4) {
-        skippedCount++;
-        errors.push(`Row ${i + 1}: Insufficient data columns.`);
+        invalidIdList.push({
+          row: rowNumber,
+          employeeId: cols[0] || '(None)',
+          reason: 'Insufficient data columns (minimum 4 columns required).',
+        });
         continue;
       }
 
-      const empId = cols[0] || `ER-${String(employees.length + successCount + 1).padStart(3, '0')}`;
+      const rawEmpId = cols[0] || '';
+      const normEmpId = normalizeEmployeeId(rawEmpId);
+
+      // 1. Mandatory Employee ID validation: no silent generation, skipping, or modification
+      if (!normEmpId) {
+        invalidIdList.push({
+          row: rowNumber,
+          employeeId: rawEmpId || '(Blank)',
+          reason: 'Employee ID is mandatory. Missing or blank Employee ID.',
+        });
+        continue;
+      }
+
+      // 2. Detect duplicate within uploaded file
+      if (seenFileIds.has(normEmpId)) {
+        duplicateInFileList.push({
+          row: rowNumber,
+          employeeId: rawEmpId,
+          firstSeenRow: seenFileIds.get(normEmpId)!,
+        });
+        continue;
+      }
+      seenFileIds.set(normEmpId, rowNumber);
+
+      // 3. Detect duplicate already stored in the database
+      const existingInDb = employees.find(
+        (e) =>
+          normalizeEmployeeId(e.employeeId) === normEmpId ||
+          normalizeEmployeeId(e.id) === normEmpId
+      );
+
+      if (existingInDb) {
+        duplicateInDbList.push({
+          row: rowNumber,
+          employeeId: rawEmpId,
+          existingName: existingInDb.fullName || `${existingInDb.firstName} ${existingInDb.lastName}`,
+        });
+        continue;
+      }
+
       const fName = cols[1] || '';
       const mName = cols[2] || '';
       const lName = cols[3] || '';
+
+      if (!fName || !lName) {
+        failedList.push({
+          row: rowNumber,
+          employeeId: rawEmpId,
+          reason: 'First Name and Last Name are required.',
+        });
+        continue;
+      }
+
       const genderVal = (cols[4] || 'Male') as Gender;
       const dobVal = cols[5] || '1992-01-01';
       const emailVal = cols[6] || `${fName.toLowerCase()}.${lName.toLowerCase()}@ethiopianre.com`;
       const phoneVal = cols[7] || '+251 91 000 0000';
       const deptVal = cols[8] || departments[0]?.name || 'Underwriting';
-      
+
       let posVal = (posColIdx !== -1 && cols[posColIdx] !== undefined ? cols[posColIdx] : cols[9]) || '';
       posVal = posVal.trim();
       const matchedPos = JOB_TITLE_OPTIONS.find(
@@ -606,23 +715,6 @@ export const EmployeeView: React.FC = () => {
       const empStatusVal = (cols[11] || cols[12] || 'Active') as EmploymentStatus;
       const hireVal = cols[12] || cols[13] || new Date().toISOString().substring(0, 10);
 
-      if (!fName || !lName) {
-        skippedCount++;
-        errors.push(`Row ${i + 1}: First and last name are required.`);
-        continue;
-      }
-
-      const exists = employees.some(
-        (e) =>
-          e.employeeId.toLowerCase() === empId.toLowerCase() ||
-          e.email.toLowerCase() === emailVal.toLowerCase()
-      );
-      if (exists) {
-        skippedCount++;
-        errors.push(`Row ${i + 1} (${empId}): Employee ID or email already registered.`);
-        continue;
-      }
-
       const matchedDept = departments.find(
         (d) =>
           d.name.toLowerCase() === deptVal.toLowerCase() ||
@@ -633,11 +725,12 @@ export const EmployeeView: React.FC = () => {
       const fullEmpName = `${fName} ${mName} ${lName}`.replace(/\s+/g, ' ').trim();
 
       const newEmp = {
-        employeeId: empId,
+        employeeId: rawEmpId,
         firstName: fName,
         middleName: mName,
         lastName: lName,
-        gender: genderVal === 'Female' ? 'Female' as Gender : 'Male' as Gender,
+        fullName: fullEmpName,
+        gender: genderVal === 'Female' ? ('Female' as Gender) : ('Male' as Gender),
         dateOfBirth: dobVal,
         email: emailVal,
         phoneNumber: phoneVal,
@@ -652,19 +745,75 @@ export const EmployeeView: React.FC = () => {
       };
 
       try {
-        await addEmployee(newEmp);
-        successCount++;
+        // Atomic reservation prevents concurrent duplicate registrations
+        const res = await addEmployee(newEmp);
+        if (res.success) {
+          successfulList.push({
+            row: rowNumber,
+            employeeId: rawEmpId,
+            name: fullEmpName,
+          });
+        } else {
+          failedList.push({
+            row: rowNumber,
+            employeeId: rawEmpId,
+            reason: res.error || 'Failed to save record',
+          });
+        }
       } catch (err: any) {
-        skippedCount++;
-        errors.push(`Row ${i + 1} (${empId}): ${err?.message || 'Error saving'}`);
+        failedList.push({
+          row: rowNumber,
+          employeeId: rawEmpId,
+          reason: err?.message || 'Error saving record',
+        });
       }
+    }
+
+    const summary = {
+      totalRows: dataLines.length,
+      successCount: successfulList.length,
+      successfulList,
+      duplicateInFileCount: duplicateInFileList.length,
+      duplicateInFileList,
+      duplicateInDbCount: duplicateInDbList.length,
+      duplicateInDbList,
+      invalidIdCount: invalidIdList.length,
+      invalidIdList,
+      failedCount: failedList.length,
+      failedList,
+    };
+
+    setDetailedImportSummary(summary);
+
+    const totalSkipped =
+      duplicateInFileList.length +
+      duplicateInDbList.length +
+      invalidIdList.length +
+      failedList.length;
+
+    const summaryErrors: string[] = [];
+    if (duplicateInFileList.length > 0) {
+      summaryErrors.push(
+        `${duplicateInFileList.length} duplicate ID(s) detected inside the file (e.g. Row ${duplicateInFileList[0].row}: "${duplicateInFileList[0].employeeId}")`
+      );
+    }
+    if (duplicateInDbList.length > 0) {
+      summaryErrors.push(
+        `${duplicateInDbList.length} duplicate ID(s) already exist in database (e.g. Row ${duplicateInDbList[0].row}: "${duplicateInDbList[0].employeeId}")`
+      );
+    }
+    if (invalidIdList.length > 0) {
+      summaryErrors.push(`${invalidIdList.length} row(s) missing valid Employee ID`);
+    }
+    if (failedList.length > 0) {
+      summaryErrors.push(`${failedList.length} row(s) failed during atomic save`);
     }
 
     setImportResult({
       total: dataLines.length,
-      success: successCount,
-      skipped: skippedCount,
-      errors: errors.slice(0, 5),
+      success: successfulList.length,
+      skipped: totalSkipped,
+      errors: summaryErrors,
     });
     setIsImporting(false);
   };
@@ -737,6 +886,26 @@ export const EmployeeView: React.FC = () => {
           </button>
 
           <button
+            id="btn-audit-emp-ids"
+            onClick={() => {
+              setRegistrySyncFeedback(null);
+              setIsIntegrityModalOpen(true);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+              integrityAudit.hasIssues
+                ? 'bg-amber-50 border-amber-300 text-amber-900 hover:bg-amber-100'
+                : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+            title="Inspect and Verify Employee ID Uniqueness Integrity"
+          >
+            <ShieldCheck className={`w-4 h-4 ${integrityAudit.hasIssues ? 'text-amber-600' : 'text-emerald-600'}`} />
+            <span>ID Integrity Audit</span>
+            {integrityAudit.hasIssues && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            )}
+          </button>
+
+          <button
             id="btn-add-employee-modal"
             onClick={openAddModal}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-white font-bold text-xs shadow-xs hover:opacity-95 transition-opacity cursor-pointer"
@@ -747,6 +916,32 @@ export const EmployeeView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Existing Data Integrity Notice if duplicate, missing, or inconsistent IDs exist */}
+      {integrityAudit.hasIssues && (
+        <div className="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs animate-in fade-in duration-200">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-sm text-amber-950">
+                Employee ID Integrity Notice: {integrityAudit.issues.length} Issue(s) Detected
+              </div>
+              <div className="text-xs text-amber-800 mt-0.5">
+                Existing employee records contain duplicate or missing IDs. Review and resolve them before locking database migration rules. No records will be automatically deleted or merged.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setRegistrySyncFeedback(null);
+              setIsIntegrityModalOpen(true);
+            }}
+            className="px-3.5 py-2 rounded-lg bg-amber-700 text-white font-bold text-xs hover:bg-amber-800 transition-colors shrink-0 cursor-pointer self-start sm:self-auto shadow-2xs"
+          >
+            Resolve in Audit Tool
+          </button>
+        </div>
+      )}
 
       {/* Filter and Search Toolbar */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-3">
@@ -1546,19 +1741,44 @@ export const EmployeeView: React.FC = () => {
 
               {/* Employee ID */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">
-                  Employee ID <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  disabled={!!editingEmployee}
-                  value={empIdInput}
-                  onChange={(e) => setEmpIdInput(e.target.value)}
-                  placeholder="e.g. ER-001"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-xs font-mono disabled:bg-slate-100"
-                />
-                <span className="text-[10px] text-slate-400">Must be unique across the enterprise</span>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">
+                    Employee ID <span className="text-rose-500">*</span>
+                  </label>
+                  {editingEmployee && (
+                    <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold bg-slate-100 text-slate-600">
+                      Primary Key (Immutable)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    disabled={Boolean(editingEmployee && !isEmpIdUnlocked)}
+                    value={empIdInput}
+                    onChange={(e) => setEmpIdInput(e.target.value)}
+                    placeholder="e.g. ER-001"
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500 text-xs font-mono disabled:bg-slate-100 disabled:text-slate-600"
+                  />
+                  {editingEmployee && isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEmpIdUnlocked(!isEmpIdUnlocked)}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors cursor-pointer shrink-0 ${
+                        isEmpIdUnlocked
+                          ? 'bg-amber-100 border-amber-300 text-amber-900'
+                          : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                      title="Admin capability to change Employee ID with atomic re-validation"
+                    >
+                      {isEmpIdUnlocked ? 'Lock ID' : 'Change ID'}
+                    </button>
+                  )}
+                </div>
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  Mandatory unique identifier. Automatically trimmed &amp; case-normalized (e.g. EMP001 and emp001 are identical).
+                </span>
               </div>
 
               {/* Name Fields: First, Middle, Last */}
@@ -1974,27 +2194,113 @@ export const EmployeeView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Import Feedback */}
-              {importResult && (
-                <div
-                  className={`p-3.5 rounded-lg border text-xs space-y-1 ${
-                    importResult.success > 0
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
-                      : 'bg-rose-50 border-rose-200 text-rose-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Import Completed: {importResult.success} successfully added</span>
+              {/* Detailed Validation & Import Summary Report */}
+              {detailedImportSummary && (
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-100 border border-slate-200">
+                    <div className="font-bold text-slate-800">
+                      Import Summary: {detailedImportSummary.totalRows} Total Row(s) Processed
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                        {detailedImportSummary.successCount} Added
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-100 text-rose-800">
+                        {detailedImportSummary.duplicateInFileCount +
+                          detailedImportSummary.duplicateInDbCount +
+                          detailedImportSummary.invalidIdCount +
+                          detailedImportSummary.failedCount}{' '}
+                        Rejected
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-slate-600">
-                    Total Rows: {importResult.total} &middot; Skipped: {importResult.skipped}
-                  </div>
-                  {importResult.errors.length > 0 && (
-                    <div className="mt-2 text-[10px] text-rose-700 space-y-0.5">
-                      {importResult.errors.map((err, idx) => (
-                        <div key={idx}>&bull; {err}</div>
-                      ))}
+
+                  {/* 1. Duplicates within uploaded file */}
+                  {detailedImportSummary.duplicateInFileList.length > 0 && (
+                    <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          Duplicates Within Uploaded File ({detailedImportSummary.duplicateInFileList.length} detected)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">
+                        The following records contain Employee IDs that appear multiple times inside this file. Duplicates were rejected to prevent overwriting:
+                      </p>
+                      <div className="max-h-32 overflow-y-auto space-y-1 font-mono text-[11px] bg-white/70 p-2 rounded border border-amber-200">
+                        {detailedImportSummary.duplicateInFileList.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-amber-950">
+                            <span>
+                              Row {item.row}: Employee ID <strong>"{item.employeeId}"</strong>
+                            </span>
+                            <span className="text-[10px] text-amber-700">
+                              (Duplicates first occurrence on Row {item.firstSeenRow})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. Duplicates already stored in database */}
+                  {detailedImportSummary.duplicateInDbList.length > 0 && (
+                    <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-900 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-xs">
+                        <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>
+                          Duplicates Already Stored in Database ({detailedImportSummary.duplicateInDbList.length} detected)
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-rose-800">
+                        The following records matched existing Employee IDs already registered in Ethiopian Reinsurance HRMS. Rejected without overwriting existing data:
+                      </p>
+                      <div className="max-h-32 overflow-y-auto space-y-1 font-mono text-[11px] bg-white/70 p-2 rounded border border-rose-200">
+                        {detailedImportSummary.duplicateInDbList.map((item, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-rose-950">
+                            <span>
+                              Row {item.row}: Employee ID <strong>"{item.employeeId}"</strong>
+                            </span>
+                            <span className="text-[10px] text-rose-700 font-sans">
+                              (Belongs to: {item.existingName})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Missing or invalid IDs */}
+                  {detailedImportSummary.invalidIdList.length > 0 && (
+                    <div className="p-3 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 space-y-1.5">
+                      <div className="font-bold text-xs">
+                        Missing or Invalid Employee IDs ({detailedImportSummary.invalidIdList.length} row(s))
+                      </div>
+                      <div className="max-h-24 overflow-y-auto space-y-1 text-[11px]">
+                        {detailedImportSummary.invalidIdList.map((item, idx) => (
+                          <div key={idx}>
+                            Row {item.row}: {item.reason} {item.employeeId ? `(ID: "${item.employeeId}")` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 4. Successful imports */}
+                  {detailedImportSummary.successCount > 0 && (
+                    <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-xs">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>
+                          Successfully Reserved &amp; Registered ({detailedImportSummary.successCount} employee(s))
+                        </span>
+                      </div>
+                      <div className="max-h-28 overflow-y-auto space-y-0.5 text-[11px] text-emerald-800">
+                        {detailedImportSummary.successfulList.map((item, idx) => (
+                          <div key={idx}>
+                            Row {item.row}: <strong>{item.employeeId}</strong> &mdash; {item.name}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2004,7 +2310,10 @@ export const EmployeeView: React.FC = () => {
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setIsImportModalOpen(false)}
+                onClick={() => {
+                  setIsImportModalOpen(false);
+                  setDetailedImportSummary(null);
+                }}
                 className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-300 cursor-pointer"
               >
                 Close
@@ -2018,7 +2327,205 @@ export const EmployeeView: React.FC = () => {
                 style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
               >
                 <Upload className="w-3.5 h-3.5" />
-                <span>{isImporting ? 'Processing Import...' : 'Import Records'}</span>
+                <span>{isImporting ? 'Processing Atomic Import...' : 'Import Records'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Employee ID Master Integrity & Verification Modal */}
+      {isIntegrityModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[85vh]">
+            <div
+              className="flex items-center justify-between px-6 py-4 border-b border-slate-200 text-white shrink-0"
+              style={{ backgroundColor: 'var(--primary-color, #0B2A5E)' }}
+            >
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-base font-bold">Employee ID Master Integrity &amp; Verification</h3>
+                  <p className="text-[11px] text-blue-100/80">
+                    Audit existing employee records for duplicate, missing, or inconsistent Employee IDs
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsIntegrityModalOpen(false)}
+                className="p-1 rounded-md text-white/80 hover:text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto text-xs flex-1">
+              {/* Feedback Alert if available */}
+              {registrySyncFeedback && (
+                <div
+                  className={`p-3.5 rounded-lg border text-xs flex items-center gap-2 ${
+                    registrySyncFeedback.type === 'success'
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                      : 'bg-rose-50 border-rose-200 text-rose-900'
+                  }`}
+                >
+                  {registrySyncFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  )}
+                  <span>{registrySyncFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Status Header Overview */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Total Existing Employees</span>
+                  <strong className="text-xl font-bold text-slate-900">{integrityAudit.totalEmployees}</strong>
+                </div>
+                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <span className="text-[11px] text-slate-500 block">Unique Employee IDs</span>
+                  <strong className="text-xl font-bold text-slate-900">{integrityAudit.uniqueIdsCount}</strong>
+                </div>
+                <div
+                  className={`p-3.5 rounded-lg border ${
+                    integrityAudit.hasIssues
+                      ? 'bg-rose-50 border-rose-200 text-rose-900'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  }`}
+                >
+                  <span className="text-[11px] block font-medium">Integrity Status</span>
+                  <strong className="text-sm font-bold flex items-center gap-1.5 mt-1">
+                    {integrityAudit.hasIssues ? (
+                      <>
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                        <span>{integrityAudit.issues.length} Issue(s) Detected</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>100% Unique Verified</span>
+                      </>
+                    )}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Case when everything is clean */}
+              {!integrityAudit.hasIssues ? (
+                <div className="p-5 rounded-xl border border-emerald-200 bg-emerald-50/70 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-950 font-bold text-sm">
+                    <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                    <span>Database ID Integrity Verified &amp; Clean</span>
+                  </div>
+                  <p className="text-xs text-emerald-900/90 leading-relaxed">
+                    All <strong>{integrityAudit.totalEmployees}</strong> employee master data records possess valid, unique Employee IDs. No duplicates, empty IDs, or normalization collisions exist.
+                  </p>
+                  <div className="pt-2">
+                    <button
+                      id="btn-sync-registry-cloud"
+                      disabled={isSyncingRegistry}
+                      onClick={async () => {
+                        setIsSyncingRegistry(true);
+                        setRegistrySyncFeedback(null);
+                        const res = await syncRegistryForExistingEmployees();
+                        setIsSyncingRegistry(false);
+                        setRegistrySyncFeedback({
+                          type: res.success ? 'success' : 'error',
+                          message: res.message,
+                        });
+                      }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-800 text-white font-bold text-xs hover:bg-emerald-900 transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+                    >
+                      <Database className="w-4 h-4" />
+                      <span>
+                        {isSyncingRegistry
+                          ? 'Synchronizing Registry...'
+                          : 'Synchronize & Lock Registry in Cloud Firestore'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Case when issues exist: show each issue and allow manual resolution */
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+                    <strong>Business Governance Rule:</strong> Existing employee records cannot be automatically deleted or merged. The administrator can review the affected employees below and click <strong>"Edit Employee to Correct ID"</strong> to assign a unique identifier.
+                  </div>
+
+                  <div className="space-y-3">
+                    {integrityAudit.issues.map((issue, idx) => (
+                      <div key={idx} className="p-4 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                issue.type === 'duplicate'
+                                  ? 'bg-rose-100 text-rose-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}
+                            >
+                              {issue.type} ID Collision
+                            </span>
+                            <span className="font-mono font-bold text-xs text-slate-900">
+                              Target ID: "{issue.employeeId}"
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-500">
+                            {issue.affectedEmployees.length} affected profile(s)
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-slate-600">{issue.description}</p>
+
+                        <div className="divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden">
+                          {issue.affectedEmployees.map((empItem) => (
+                            <div
+                              key={empItem.id}
+                              className="p-3 flex items-center justify-between gap-3 hover:bg-slate-50 text-xs"
+                            >
+                              <div>
+                                <div className="font-bold text-slate-900">{empItem.fullName}</div>
+                                <div className="text-[11px] text-slate-500">
+                                  {empItem.departmentName} &middot; {empItem.email} &middot; Current ID:{' '}
+                                  <span className="font-mono text-slate-800 font-bold">{empItem.employeeId}</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsIntegrityModalOpen(false);
+                                  const targetEmp = employees.find((e) => e.id === empItem.id);
+                                  if (targetEmp) {
+                                    openEditModal(targetEmp);
+                                    setIsEmpIdUnlocked(true);
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-blue-900 text-white font-semibold text-xs hover:bg-blue-800 transition-colors shrink-0 cursor-pointer"
+                              >
+                                Edit Record to Fix ID
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0">
+              <span className="text-[11px] text-slate-500">
+                Ethio-Re HRMS Employee Master Data Governance Engine
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsIntegrityModalOpen(false)}
+                className="px-4 py-2 rounded-lg bg-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-300 cursor-pointer"
+              >
+                Close Audit Tool
               </button>
             </div>
           </div>

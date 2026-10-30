@@ -44,6 +44,19 @@
       },
       "required": ["id", "employeeId", "firstName", "lastName", "departmentName", "position", "employmentStatus"]
     },
+    "EmployeeIdReservation": {
+      "title": "EmployeeIdReservation",
+      "description": "Unique atomic reservation of Employee ID in the HRMS master directory",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string", "maxLength": 64 },
+        "normalizedId": { "type": "string", "maxLength": 64 },
+        "employeeDocId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 32 },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["employeeId", "normalizedId", "employeeDocId"]
+    },
     "AttendanceRecord": {
       "title": "AttendanceRecord",
       "description": "Daily employee attendance check-in and operational finalization record",
@@ -144,6 +157,10 @@
     "/employees/{employeeId}": {
       "schema": "Employee",
       "description": "Ethio-Re employee directory records"
+    },
+    "/employeeIdRegistry/{id}": {
+      "schema": "EmployeeIdReservation",
+      "description": "Atomic unique registry preventing duplicate Employee ID creation"
     },
     "/departments/{departmentId}": {
       "schema": "Department",

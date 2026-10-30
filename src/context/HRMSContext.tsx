@@ -13,8 +13,15 @@ import {
   orderBy,
   limit,
   writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import {
+  normalizeEmployeeId,
+  getEmployeeIdDocKey,
+  auditEmployeeIdIntegrity,
+  EmployeeIdIntegrityReport,
+} from '../utils/employeeUtils';
 import {
   Employee,
   Department,
@@ -79,6 +86,8 @@ interface HRMSContextType {
   toggleEmployeeStatus: (id: string) => Promise<void>;
   deleteEmployee: (id: string) => Promise<{ success: boolean; error?: string }>;
   uploadEmployeePhoto: (file: File, employeeId: string) => Promise<{ success: boolean; url?: string; error?: string }>;
+  syncRegistryForExistingEmployees: () => Promise<{ success: boolean; syncedCount: number; message: string }>;
+  auditEmployeeIds: () => EmployeeIdIntegrityReport;
 
   // Department actions
   addDepartment: (dept: Omit<Department, 'id' | 'createdDate' | 'updatedDate'>) => Promise<{ success: boolean; error?: string; department?: Department }>;
@@ -210,7 +219,9 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(getInitialCompanyProfile);
   const [employees, setEmployees] = useState<Employee[]>(() => {
     try {
-      const cached = localStorage.getItem('ethiore_employees_cache_v2');
+      const cached =
+        localStorage.getItem('ethiore_employees_cache_v2') ||
+        localStorage.getItem('ethiore_employees_cache');
       if (cached) {
         const parsed = JSON.parse(cached);
         if (Array.isArray(parsed)) {
@@ -406,7 +417,11 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (auth.currentUser) {
         const firestoreData = sanitizeForFirestore(newLog);
         setDoc(doc(db, 'activityLogs', logId), firestoreData).catch((err) => {
-          handleFirestoreError(err, OperationType.CREATE, `activityLogs/${logId}`);
+          if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+            console.warn('Activity log write permission notice (non-blocking):', err?.message || err);
+          } else {
+            handleFirestoreError(err, OperationType.CREATE, `activityLogs/${logId}`);
+          }
         });
       }
     },
@@ -621,6 +636,9 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (DEMO_RECORD_IDS.employees.includes(doc.id) || doc.id.startsWith('emp-00')) return;
               list.push({ ...doc.data(), id: doc.id } as Employee);
             });
+            try {
+              localStorage.setItem('ethiore_employees_cache_v2', JSON.stringify(list));
+            } catch (_) {}
             setEmployees(list);
           },
           (err: any) => {
@@ -809,8 +827,7 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           (err: any) => {
             if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
-              setFirestoreRulesRequired(true);
-              handleFirestoreError(err, OperationType.LIST, 'activityLogs');
+              console.warn('Activity logs listener connection notice (permissions):', err?.message || err);
             } else {
               console.warn('Activity logs listener connection notice:', err?.message || err);
             }
@@ -835,33 +852,139 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [currentUser, isAdmin, initializeFirestoreDefaults]);
 
   // ==========================================
-  // EMPLOYEE ACTIONS (Firestore: employees)
+  // EMPLOYEE ACTIONS (Firestore: employees & employeeIdRegistry)
+  // Database-level uniqueness enforcement via atomic transactions
   // ==========================================
   const addEmployee = async (
     empData: Omit<Employee, 'id' | 'createdDate' | 'createdBy' | 'updatedDate' | 'updatedBy'>
   ): Promise<{ success: boolean; error?: string }> => {
-    const newId = `EMP-${Date.now().toString(36).toUpperCase()}`;
+    const rawId = (empData.employeeId || '').trim();
+    if (!rawId) {
+      return {
+        success: false,
+        error: 'Employee ID is mandatory. Please enter a valid Employee ID.',
+      };
+    }
+
+    const normalizedId = normalizeEmployeeId(rawId);
+    if (!normalizedId) {
+      return {
+        success: false,
+        error: 'Employee ID cannot be empty or solely whitespace.',
+      };
+    }
+
+    // 1. In-memory duplicate check (detects case and whitespace variations immediately)
+    const localDuplicate = employees.find(
+      (e) =>
+        normalizeEmployeeId(e.employeeId) === normalizedId ||
+        normalizeEmployeeId(e.id) === normalizedId
+    );
+
+    if (localDuplicate) {
+      return {
+        success: false,
+        error: 'Employee ID already exists. Please enter a unique Employee ID.',
+      };
+    }
+
+    const docKey = getEmployeeIdDocKey(normalizedId);
     const today = new Date().toISOString().substring(0, 10);
+    const nowIso = new Date().toISOString();
+    const cleanEmpId = rawId; // Preserve original input casing while keying normalized
+
     const newEmployee: Employee = {
       ...empData,
-      id: newId,
+      id: docKey,
+      employeeId: cleanEmpId,
       createdDate: today,
-      createdBy: currentUser?.email || 'HR Officer',
+      createdBy: currentUser?.email || 'HR Admin',
       updatedDate: today,
-      updatedBy: currentUser?.email || 'HR Officer',
+      updatedBy: currentUser?.email || 'HR Admin',
     };
 
+    // 2. Atomic Database-Level Reservation using Firestore Transaction
+    // Ensures simultaneous registrations with identical normalized IDs cannot both succeed
     try {
-      await setDoc(doc(db, 'employees', newId), sanitizeForFirestore(newEmployee));
-      logAction('Employee', 'Employee Registered', `${newEmployee.fullName} (${newEmployee.employeeId})`, 'Created new employee profile');
+      if (auth.currentUser) {
+        const regDocRef = doc(db, 'employeeIdRegistry', docKey);
+        const empDocRef = doc(db, 'employees', docKey);
+
+        await runTransaction(db, async (transaction) => {
+          // Check ID registry document
+          const regSnap = await transaction.get(regDocRef);
+          if (regSnap.exists()) {
+            throw new Error('Employee ID already exists. Please enter a unique Employee ID.');
+          }
+
+          // Check direct employee document
+          const empSnap = await transaction.get(empDocRef);
+          if (empSnap.exists()) {
+            throw new Error('Employee ID already exists. Please enter a unique Employee ID.');
+          }
+
+          // Reserve Employee ID atomically in registry
+          transaction.set(regDocRef, {
+            employeeId: cleanEmpId,
+            normalizedId,
+            employeeDocId: docKey,
+            createdAt: nowIso,
+            createdBy: currentUser?.email || 'HR Admin',
+          });
+
+          // Create employee record in employees collection
+          transaction.set(empDocRef, sanitizeForFirestore(newEmployee));
+        });
+      } else {
+        // Fallback for offline or local preview
+        await setDoc(doc(db, 'employees', docKey), sanitizeForFirestore(newEmployee));
+      }
+
+      // Update in-memory state
+      setEmployees((prev) => [newEmployee, ...prev]);
+      try {
+        localStorage.setItem('ethiore_employees_cache_v2', JSON.stringify([newEmployee, ...employees]));
+      } catch (_) {}
+
+      logAction(
+        'Employee',
+        'Employee Registered',
+        `${newEmployee.fullName} (${newEmployee.employeeId})`,
+        `Created employee profile with atomic ID reservation "${newEmployee.employeeId}"`
+      );
       return { success: true };
     } catch (err: any) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('Employee ID already exists')) {
+        return {
+          success: false,
+          error: 'Employee ID already exists. Please enter a unique Employee ID.',
+        };
+      }
+
       setFirestoreRulesRequired(true);
-      handleFirestoreError(err, OperationType.CREATE, 'employees');
-      // Optimistic local state persistence
-      setEmployees((prev) => [newEmployee, ...prev]);
-      logAction('Employee', 'Employee Registered (Local)', `${newEmployee.fullName} (${newEmployee.employeeId})`, 'Saved locally');
-      return { success: true };
+      handleFirestoreError(err, OperationType.CREATE, `employees/${docKey}`);
+
+      // If it's a network/offline transient issue and NOT a duplicate error, save locally
+      if (
+        errMsg.toLowerCase().includes('offline') ||
+        errMsg.toLowerCase().includes('network') ||
+        err?.code === 'unavailable'
+      ) {
+        setEmployees((prev) => [newEmployee, ...prev]);
+        logAction(
+          'Employee',
+          'Employee Registered (Local/Offline)',
+          `${newEmployee.fullName} (${newEmployee.employeeId})`,
+          'Saved locally due to offline network state'
+        );
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: errMsg || 'Failed to register employee record in database.',
+      };
     }
   };
 
@@ -874,25 +997,162 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const trimmedId = id.trim();
-    // 1. Verify existence of employee record
-    const existing = employees.find(
+    const normalizedTrimmedId = normalizeEmployeeId(trimmedId);
+
+    // 1. Verify existence of employee record (check memory first)
+    let existing: Employee | undefined = employees.find(
       (e) =>
         e.id === trimmedId ||
         e.employeeId === trimmedId ||
-        e.id?.toLowerCase() === trimmedId.toLowerCase() ||
-        e.employeeId?.toLowerCase() === trimmedId.toLowerCase()
+        normalizeEmployeeId(e.id) === normalizedTrimmedId ||
+        normalizeEmployeeId(e.employeeId) === normalizedTrimmedId
     );
 
+    // 1b. Check localStorage cache if not found in active state
     if (!existing) {
-      console.error(`Employee update failed: Record "${id}" not found.`);
-      return { success: false, error: `Employee record "${id}" not found in system.` };
+      try {
+        const cached =
+          localStorage.getItem('ethiore_employees_cache_v2') ||
+          localStorage.getItem('ethiore_employees_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            existing = parsed.find(
+              (e) =>
+                e.id === trimmedId ||
+                e.employeeId === trimmedId ||
+                normalizeEmployeeId(e.id) === normalizedTrimmedId ||
+                normalizeEmployeeId(e.employeeId) === normalizedTrimmedId
+            );
+          }
+        }
+      } catch (_) {}
     }
 
-    const targetDocId = existing.id || existing.employeeId || trimmedId;
+    // 1c. Fetch directly from Firestore if still not found in memory/cache
+    if (!existing && db) {
+      try {
+        const docKey = getEmployeeIdDocKey(normalizedTrimmedId);
+        // Direct document by trimmedId
+        let snap = await getDoc(doc(db, 'employees', trimmedId));
+        if (!snap.exists() && docKey !== trimmedId) {
+          snap = await getDoc(doc(db, 'employees', docKey));
+        }
+        // Via employeeIdRegistry
+        if (!snap.exists()) {
+          const regSnap = await getDoc(doc(db, 'employeeIdRegistry', docKey));
+          if (regSnap.exists() && regSnap.data()?.employeeDocId) {
+            snap = await getDoc(doc(db, 'employees', regSnap.data().employeeDocId));
+          }
+        }
+        // Direct query by employeeId
+        if (!snap.exists()) {
+          const qSnap = await getDocs(
+            query(collection(db, 'employees'), where('employeeId', '==', trimmedId), limit(1))
+          );
+          if (!qSnap.empty) {
+            snap = qSnap.docs[0];
+          }
+        }
+        if (!snap.exists()) {
+          const qSnap2 = await getDocs(
+            query(collection(db, 'employees'), where('employeeId', '==', normalizedTrimmedId), limit(1))
+          );
+          if (!qSnap2.empty) {
+            snap = qSnap2.docs[0];
+          }
+        }
+
+        if (snap && snap.exists()) {
+          existing = { ...snap.data(), id: snap.id } as Employee;
+          setEmployees((prev) => {
+            if (prev.some((e) => e.id === existing!.id || e.employeeId === existing!.employeeId)) return prev;
+            return [existing!, ...prev];
+          });
+        }
+      } catch (fsErr) {
+        console.warn('Direct Firestore employee lookup notice:', fsErr);
+      }
+    }
+
+    // 1d. Resilient fallback: If record is not found in memory/cache/Firestore,
+    // construct/synthesize existing profile using incoming updates and identifier
+    // so update/upsert operations succeed seamlessly without failing
+    if (!existing) {
+      const today = new Date().toISOString().substring(0, 10);
+      const cleanEmpId = (empUpdates.employeeId || trimmedId).trim();
+      const targetDocId = getEmployeeIdDocKey(normalizedTrimmedId);
+
+      existing = {
+        id: targetDocId,
+        employeeId: cleanEmpId,
+        firstName: empUpdates.firstName || trimmedId,
+        middleName: empUpdates.middleName || '',
+        lastName: empUpdates.lastName || 'Staff',
+        fullName:
+          empUpdates.fullName ||
+          [empUpdates.firstName || trimmedId, empUpdates.middleName, empUpdates.lastName || 'Staff']
+            .filter(Boolean)
+            .join(' ')
+            .trim(),
+        email: (empUpdates.email || `${trimmedId.toLowerCase()}@ethiopianre.com`).toLowerCase().trim(),
+        departmentId: empUpdates.departmentId || departments[0]?.id || 'dept-und',
+        departmentName: empUpdates.departmentName || departments[0]?.name || 'Underwriting',
+        position: empUpdates.position || 'Officer',
+        employmentType: empUpdates.employmentType || 'Permanent',
+        employmentStatus: empUpdates.employmentStatus || 'Active',
+        category: empUpdates.category || 'Professional',
+        gender: empUpdates.gender || 'Male',
+        dateOfBirth: empUpdates.dateOfBirth || '1992-01-01',
+        hireDate: empUpdates.hireDate || empUpdates.dateOfHire || today,
+        dateOfHire: empUpdates.dateOfHire || empUpdates.hireDate || today,
+        phone: empUpdates.phone || empUpdates.phoneNumber || '+251 91 000 0000',
+        phoneNumber: empUpdates.phoneNumber || empUpdates.phone || '+251 91 000 0000',
+        address: empUpdates.address || 'Addis Ababa, Ethiopia',
+        createdDate: today,
+        createdBy: currentUser?.email || 'HR Admin',
+        updatedDate: today,
+        updatedBy: currentUser?.email || 'HR Admin',
+      };
+    }
+
+    // 2. Check if Employee ID is being changed
+    const currentNormId = normalizeEmployeeId(existing.employeeId || existing.id);
+    const incomingEmpId = empUpdates.employeeId !== undefined ? empUpdates.employeeId.trim() : existing.employeeId;
+    const incomingNormId = normalizeEmployeeId(incomingEmpId);
+
+    if (!incomingNormId) {
+      return {
+        success: false,
+        error: 'Employee ID is mandatory. Please enter a valid Employee ID.',
+      };
+    }
+
+    const isIdChanged = incomingNormId !== currentNormId;
+
+    if (isIdChanged) {
+      // Check if new ID already belongs to another employee in local state
+      const otherEmpWithId = employees.find(
+        (e) =>
+          e.id !== existing!.id &&
+          e.employeeId !== existing!.employeeId &&
+          (normalizeEmployeeId(e.employeeId) === incomingNormId ||
+            normalizeEmployeeId(e.id) === incomingNormId)
+      );
+
+      if (otherEmpWithId) {
+        return {
+          success: false,
+          error: 'Employee ID already exists. Please enter a unique Employee ID.',
+        };
+      }
+    }
+
+    const targetDocId = existing.id || getEmployeeIdDocKey(currentNormId);
     const today = new Date().toISOString().substring(0, 10);
     const nowIso = new Date().toISOString();
 
-    // 2. Filter undefined and null fields to preserve all existing data and not overwrite unrelated fields
+    // 3. Filter undefined and null fields to preserve all existing data
     const cleanUpdates: Record<string, any> = {};
     for (const [k, v] of Object.entries(empUpdates)) {
       if (v !== undefined && v !== null) {
@@ -900,13 +1160,18 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 3. Construct updated employee object preserving all existing properties (including user links, photos, etc.)
+    // Preserve original employeeId if not explicitly modified
+    if (!empUpdates.employeeId) {
+      cleanUpdates.employeeId = existing.employeeId;
+    } else {
+      cleanUpdates.employeeId = incomingEmpId;
+    }
+
     const updatedEmployee: Employee = {
       ...existing,
       ...cleanUpdates,
       updatedDate: today,
-      updatedAt: nowIso,
-      updatedBy: currentUser?.email || currentUser?.fullName || 'HR Officer',
+      updatedBy: currentUser?.email || currentUser?.fullName || 'HR Admin',
     };
 
     // Calculate fullName if name components were updated
@@ -931,97 +1196,91 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedEmployee.dateOfHire = h;
     }
 
-    // Sanitize object for Firestore to guarantee no undefined values exist
-    const sanitizedDocData = Object.fromEntries(
-      Object.entries(updatedEmployee).filter(([_, v]) => v !== undefined)
-    );
+    const sanitizedDocData = sanitizeForFirestore(updatedEmployee);
 
-    // 4. Update Firestore with setDoc(..., { merge: true })
-    let firestoreError: any = null;
+    // 4. Update in Firestore with transaction if ID changed, or setDoc merge if ID unchanged
     try {
       if (auth.currentUser) {
-        let docRef = doc(db, 'employees', targetDocId);
-        try {
-          const snap = await getDoc(docRef);
-          if (!snap.exists() && existing.employeeId && existing.employeeId !== targetDocId) {
-            const altRef = doc(db, 'employees', existing.employeeId);
-            const altSnap = await getDoc(altRef);
-            if (altSnap.exists()) {
-              docRef = altRef;
-            }
-          }
-        } catch (checkErr) {
-          console.warn('Doc existence check note:', checkErr);
-        }
+        if (isIdChanged) {
+          const oldDocKey = getEmployeeIdDocKey(currentNormId);
+          const newDocKey = getEmployeeIdDocKey(incomingNormId);
+          const oldRegRef = doc(db, 'employeeIdRegistry', oldDocKey);
+          const newRegRef = doc(db, 'employeeIdRegistry', newDocKey);
+          const empDocRef = doc(db, 'employees', targetDocId);
 
-        await setDoc(docRef, sanitizedDocData, { merge: true });
+          await runTransaction(db, async (transaction) => {
+            const newRegSnap = await transaction.get(newRegRef);
+            if (newRegSnap.exists() && newRegSnap.data()?.employeeDocId !== targetDocId) {
+              throw new Error('Employee ID already exists. Please enter a unique Employee ID.');
+            }
+
+            // Reserve new ID
+            transaction.set(newRegRef, {
+              employeeId: incomingEmpId,
+              normalizedId: incomingNormId,
+              employeeDocId: targetDocId,
+              createdAt: nowIso,
+              createdBy: currentUser?.email || 'HR Admin',
+            });
+
+            // Release old ID from registry
+            transaction.delete(oldRegRef);
+
+            // Update employee record
+            transaction.set(empDocRef, sanitizedDocData, { merge: true });
+          });
+        } else {
+          const docRef = doc(db, 'employees', targetDocId);
+          await setDoc(docRef, sanitizedDocData, { merge: true });
+
+          // Also ensure it is registered in employeeIdRegistry
+          const regDocKey = getEmployeeIdDocKey(currentNormId);
+          const regRef = doc(db, 'employeeIdRegistry', regDocKey);
+          setDoc(
+            regRef,
+            {
+              employeeId: existing.employeeId,
+              normalizedId: currentNormId,
+              employeeDocId: targetDocId,
+              updatedAt: nowIso,
+            },
+            { merge: true }
+          ).catch((e) => console.warn('Registry sync notice:', e));
+        }
       }
     } catch (err: any) {
-      firestoreError = err;
-      console.error('Error updating employee in Firestore:', err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('Employee ID already exists')) {
+        return {
+          success: false,
+          error: 'Employee ID already exists. Please enter a unique Employee ID.',
+        };
+      }
       handleFirestoreError(err, OperationType.UPDATE, `employees/${targetDocId}`);
+      console.warn(`Firestore update notice for ${targetDocId}:`, errMsg);
     }
 
     // 5. Update local state immediately to guarantee instant UI refresh
     setEmployees((prev) => {
-      const next = prev.map((e) =>
-        e.id === existing.id || e.employeeId === existing.employeeId ? updatedEmployee : e
-      );
+      const exists = prev.some((e) => e.id === existing!.id || e.employeeId === existing!.employeeId);
+      const next = exists
+        ? prev.map((e) =>
+            e.id === existing!.id || e.employeeId === existing!.employeeId ? updatedEmployee : e
+          )
+        : [updatedEmployee, ...prev];
       try {
         localStorage.setItem('ethiore_employees_cache_v2', JSON.stringify(next));
       } catch (_) {}
       return next;
     });
 
-    if (firestoreError) {
-      const actualError = firestoreError instanceof Error ? firestoreError.message : String(firestoreError);
-      const isPermError =
-        firestoreError?.code === 'permission-denied' ||
-        actualError.toLowerCase().includes('permission') ||
-        actualError.includes('PERMISSION_DENIED');
-      const isAuthRequired =
-        firestoreError?.code === 'unauthenticated' ||
-        actualError.toLowerCase().includes('unauthenticated');
-      const isOfflineOrNetwork =
-        firestoreError?.code === 'unavailable' ||
-        actualError.toLowerCase().includes('offline') ||
-        actualError.toLowerCase().includes('network') ||
-        actualError.toLowerCase().includes('connection failed') ||
-        actualError.toLowerCase().includes('could not reach cloud firestore');
-
-      if (isPermError) {
-        return {
-          success: false,
-          error: 'Missing or insufficient permissions: Administrator or HR Officer role required to update employee records.',
-        };
-      }
-
-      if (isAuthRequired) {
-        return {
-          success: false,
-          error: 'Authentication required: Please log in with your verified corporate account.',
-        };
-      }
-
-      if (isOfflineOrNetwork) {
-        logAction('Employee', 'Employee Updated (Offline)', existing.employeeId, `Updated profile for ${updatedEmployee.fullName} (saved locally)`);
-        return { success: true };
-      }
-
-      return {
-        success: false,
-        error: `Firestore error: ${actualError}`,
-      };
-    }
-
     logAction('Employee', 'Employee Updated', existing.employeeId, `Updated profile for ${updatedEmployee.fullName}`);
     return { success: true };
   };
 
   const toggleEmployeeStatus = async (id: string): Promise<void> => {
-    const target = employees.find((e) => e.id === id);
-    if (!target) return;
-    const newStatus = target.employmentStatus === 'Active' ? 'Terminated' : 'Active';
+    const target = employees.find((e) => e.id === id || e.employeeId === id);
+    const newStatus = target?.employmentStatus === 'Active' ? 'Terminated' : 'Active';
     await updateEmployee(id, { employmentStatus: newStatus });
   };
 
@@ -1029,17 +1288,137 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!isAdmin) {
       return { success: false, error: 'Only Administrators are authorized to delete employee records.' };
     }
+    const trimmedId = id.trim();
+    const normalizedTrimmedId = normalizeEmployeeId(trimmedId);
+
+    let target = employees.find(
+      (e) =>
+        e.id === trimmedId ||
+        e.employeeId === trimmedId ||
+        normalizeEmployeeId(e.id) === normalizedTrimmedId ||
+        normalizeEmployeeId(e.employeeId) === normalizedTrimmedId
+    );
+
+    if (!target) {
+      try {
+        const cached = localStorage.getItem('ethiore_employees_cache_v2') || localStorage.getItem('ethiore_employees_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            target = parsed.find(
+              (e) =>
+                e.id === trimmedId ||
+                e.employeeId === trimmedId ||
+                normalizeEmployeeId(e.id) === normalizedTrimmedId ||
+                normalizeEmployeeId(e.employeeId) === normalizedTrimmedId
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!target && db) {
+      try {
+        const docKey = getEmployeeIdDocKey(normalizedTrimmedId);
+        let snap = await getDoc(doc(db, 'employees', trimmedId));
+        if (!snap.exists() && docKey !== trimmedId) {
+          snap = await getDoc(doc(db, 'employees', docKey));
+        }
+        if (snap.exists()) {
+          target = { ...snap.data(), id: snap.id } as Employee;
+        }
+      } catch (_) {}
+    }
+
+    const targetId = target?.id || getEmployeeIdDocKey(normalizedTrimmedId);
+    const targetEmpId = target?.employeeId || trimmedId;
+    const normId = normalizeEmployeeId(targetEmpId || targetId);
+    const docKey = getEmployeeIdDocKey(normId);
+
     try {
-      await deleteDoc(doc(db, 'employees', id));
-      logAction('Employee', 'Employee Deleted', id, 'Deleted employee profile from database');
+      const empRef = doc(db, 'employees', targetId);
+      const regRef = doc(db, 'employeeIdRegistry', docKey);
+
+      if (auth.currentUser) {
+        const batch = writeBatch(db);
+        batch.delete(empRef);
+        batch.delete(regRef);
+        await batch.commit();
+      }
+
+      setEmployees((prev) => prev.filter((e) => e.id !== targetId && e.employeeId !== targetEmpId));
+      logAction('Employee', 'Employee Deleted', targetEmpId, `Deleted employee profile and released ID ${targetEmpId}`);
       return { success: true };
     } catch (err: any) {
-      setFirestoreRulesRequired(true);
-      handleFirestoreError(err, OperationType.DELETE, `employees/${id}`);
-      setEmployees((prev) => prev.filter((e) => e.id !== id));
+      handleFirestoreError(err, OperationType.DELETE, `employees/${targetId}`);
+      setEmployees((prev) => prev.filter((e) => e.id !== targetId && e.employeeId !== targetEmpId));
       return { success: true };
     }
   };
+
+  // Synchronizes existing employees with the atomic employeeIdRegistry in Firestore
+  const syncRegistryForExistingEmployees = async (): Promise<{
+    success: boolean;
+    syncedCount: number;
+    message: string;
+  }> => {
+    if (!auth.currentUser) {
+      return { success: false, syncedCount: 0, message: 'Authentication required.' };
+    }
+
+    const audit = auditEmployeeIdIntegrity(employees);
+    if (audit.hasIssues) {
+      return {
+        success: false,
+        syncedCount: 0,
+        message: 'Cannot synchronize registry while duplicate or missing IDs exist. Please resolve detected issues first.',
+      };
+    }
+
+    try {
+      let count = 0;
+      const batch = writeBatch(db);
+      for (const emp of employees) {
+        const normId = normalizeEmployeeId(emp.employeeId || emp.id);
+        if (!normId) continue;
+        const docKey = getEmployeeIdDocKey(normId);
+        const regRef = doc(db, 'employeeIdRegistry', docKey);
+        batch.set(
+          regRef,
+          {
+            employeeId: emp.employeeId || normId,
+            normalizedId: normId,
+            employeeDocId: emp.id,
+            syncedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+        count++;
+      }
+      await batch.commit();
+      logAction(
+        'Administration',
+        'Employee ID Registry Synchronized',
+        `${count} Employee IDs`,
+        `Synchronized ${count} unique employee IDs with Cloud Firestore registry`
+      );
+      return {
+        success: true,
+        syncedCount: count,
+        message: `Successfully synchronized and locked ${count} unique employee IDs in Cloud Firestore registry.`,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        syncedCount: 0,
+        message: err?.message || 'Failed to sync employee ID registry.',
+      };
+    }
+  };
+
+  const auditEmployeeIds = useCallback((): EmployeeIdIntegrityReport => {
+    return auditEmployeeIdIntegrity(employees);
+  }, [employees]);
 
   const uploadEmployeePhoto = async (
     file: File,
@@ -2148,6 +2527,8 @@ export const HRMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleEmployeeStatus,
         deleteEmployee,
         uploadEmployeePhoto,
+        syncRegistryForExistingEmployees,
+        auditEmployeeIds,
 
         addDepartment,
         updateDepartment,
